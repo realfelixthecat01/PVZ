@@ -10,6 +10,8 @@
 [Oo]bj/
 [Dd]ebug/
 [Rr]elease/
+publish-test-out/
+**/PlayerTemplate/
 
 # NuGet
 *.nupkg

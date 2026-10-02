@@ -1,3 +1,5 @@
 <Solution>
   <Project Path="PVZ/PVZ.csproj" />
+  <Project Path="PVZ.Core/PVZ.Core.csproj" />
+  <Project Path="PVZ.Player/PVZ.Player.csproj" />
 </Solution>

@@ -1,8 +1,10 @@
+using PVZ.Core;
+
 namespace PVZ
 {
     public partial class Form1 : Form
     {
-        private readonly List<TaskItem> _tasks = new();
+        private readonly List<TaskbookTaskDto> _tasks = new();
         private readonly List<Button> _taskTabButtons = new();
         private int _currentTaskIndex;
         private bool _suppressUiSync;
@@ -27,12 +29,12 @@ namespace PVZ
             SetupUi();
             WireEvents();
 
-            var firstTask = new TaskItem
+            var firstTask = new TaskbookTaskDto
             {
                 Description = textBox1.Text,
                 BonusPointsForAllTests = ParseIntOrDefault(textBox5.Text, 10),
             };
-            firstTask.Tests.Add(new TestCase
+            firstTask.Tests.Add(new TestCaseDto
             {
                 Input = textBox2.Text,
                 Output = textBox3.Text,
@@ -111,27 +113,13 @@ namespace PVZ
             textBox1.TextChanged += (_, _) => SyncDescriptionFromUi();
             textBox5.TextChanged += (_, _) => SyncBonusPointsFromUi();
 
-            checkBox1.CheckedChanged += (_, _) => TopMost = checkBox1.Checked;
-            checkBox2.CheckedChanged += (_, _) =>
-            {
-                if (checkBox2.Checked)
-                {
-                    FormBorderStyle = FormBorderStyle.None;
-                    WindowState = FormWindowState.Maximized;
-                }
-                else
-                {
-                    WindowState = FormWindowState.Normal;
-                    FormBorderStyle = FormBorderStyle.Sizable;
-                }
-            };
         }
 
         private void AddTask()
         {
             SaveCurrentTaskFromUi();
-            _tasks.Add(new TaskItem());
-            _tasks[^1].Tests.Add(new TestCase());
+            _tasks.Add(new TaskbookTaskDto());
+            _tasks[^1].Tests.Add(new TestCaseDto());
             _currentTaskIndex = _tasks.Count - 1;
             RebuildTaskTabs();
             LoadTaskToUi(_currentTaskIndex);
@@ -278,7 +266,7 @@ namespace PVZ
             task.Tests.Clear();
             foreach (Control control in _testsFlow.Controls)
             {
-                if (control is Panel panel && panel.Tag is TestCase test)
+                if (control is Panel panel && panel.Tag is TestCaseDto test)
                 {
                     ReadTestFromPanel(panel, test);
                     task.Tests.Add(test);
@@ -302,7 +290,7 @@ namespace PVZ
         private void AddTestToCurrentTask()
         {
             SaveCurrentTaskFromUi();
-            var test = new TestCase();
+            var test = new TestCaseDto();
             _tasks[_currentTaskIndex].Tests.Add(test);
             _testsFlow.Controls.Add(CreateTestPanel(test));
             LayoutTestPanels();
@@ -415,7 +403,7 @@ namespace PVZ
             }
         }
 
-        private void RemoveTestPanel(Panel panel, TestCase test)
+        private void RemoveTestPanel(Panel panel, TestCaseDto test)
         {
             var task = _tasks[_currentTaskIndex];
             if (task.Tests.Count <= 1)
@@ -431,7 +419,7 @@ namespace PVZ
             LayoutTestPanels();
         }
 
-        private Panel CreateTestPanel(TestCase test)
+        private Panel CreateTestPanel(TestCaseDto test)
         {
             var panel = new Panel
             {
@@ -511,7 +499,7 @@ namespace PVZ
             return panel;
         }
 
-        private static void ReadTestFromPanel(Panel panel, TestCase test)
+        private static void ReadTestFromPanel(Panel panel, TestCaseDto test)
         {
             foreach (Control c in panel.Controls)
             {
@@ -533,15 +521,61 @@ namespace PVZ
             }
         }
 
-        private void OnCreateTaskbook()
+        private async void OnCreateTaskbook()
         {
             SaveCurrentTaskFromUi();
-            var totalTests = _tasks.Sum(t => t.Tests.Count);
-            MessageBox.Show(
-                $"Готово к созданию задачника.\nЗадач: {_tasks.Count}\nТестов всего: {totalTests}",
-                Text,
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+
+            if (string.IsNullOrWhiteSpace(textBox4.Text))
+            {
+                MessageBox.Show("Укажите пароль преподавателя.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (_tasks.Count == 0 || _tasks.Any(t => t.Tests.Count == 0))
+            {
+                MessageBox.Show("У каждой задачи должен быть хотя бы один тест.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            using var dlg = new SaveFileDialog
+            {
+                Filter = "Задачник (*.exe)|*.exe",
+                FileName = "Задачник.exe",
+                Title = "Сохранить exe задачника",
+            };
+            if (dlg.ShowDialog() != DialogResult.OK)
+                return;
+
+            var document = TaskbookPublisher.CreateDocument(
+                _tasks,
+                textBox4.Text,
+                checkBox3.Checked,
+                checkBox1.Checked,
+                checkBox2.Checked,
+                checkBox5.Checked);
+
+            UseWaitCursor = true;
+            Enabled = false;
+            try
+            {
+                var result = await TaskbookPublisher.PublishExeAsync(dlg.FileName, document);
+                if (!result.Success)
+                {
+                    MessageBox.Show(result.ErrorMessage ?? "Ошибка сборки.", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                MessageBox.Show(
+                    $"Задачник создан:\n{result.OutputExePath}",
+                    Text,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            finally
+            {
+                Enabled = true;
+                UseWaitCursor = false;
+            }
         }
 
         private static int ParseIntOrDefault(string? text, int defaultValue)

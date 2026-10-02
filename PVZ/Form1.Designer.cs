@@ -52,6 +52,7 @@
             checkBox1 = new CheckBox();
             checkBox2 = new CheckBox();
             checkBox3 = new CheckBox();
+            checkBox5 = new CheckBox();
             panel1.SuspendLayout();
             panel2.SuspendLayout();
             panel3.SuspendLayout();
@@ -280,11 +281,23 @@
             checkBox3.Text = "Последовательная разблокировка задач";
             checkBox3.UseVisualStyleBackColor = true;
             // 
+            // checkBox5
+            // 
+            checkBox5.AutoSize = true;
+            checkBox5.CheckAlign = ContentAlignment.MiddleRight;
+            checkBox5.Location = new Point(247, 450);
+            checkBox5.Name = "checkBox5";
+            checkBox5.Size = new Size(194, 19);
+            checkBox5.TabIndex = 12;
+            checkBox5.Text = "Скрыть проводник (Explorer)";
+            checkBox5.UseVisualStyleBackColor = true;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(800, 494);
+            Controls.Add(checkBox5);
             Controls.Add(checkBox3);
             Controls.Add(checkBox1);
             Controls.Add(checkBox2);
@@ -331,5 +344,6 @@
         private Label label5;
         private TextBox textBox6;
         private CheckBox checkBox4;
+        private CheckBox checkBox5;
     }
 }

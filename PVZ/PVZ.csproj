@@ -3,9 +3,63 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifiers>win-x64;win-x86</RuntimeIdentifiers>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PVZ.Core\PVZ.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <PlayerProject>$(MSBuildThisFileDirectory)..\PVZ.Player\PVZ.Player.csproj</PlayerProject>
+    <_PlayerRidSuffix Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)\</_PlayerRidSuffix>
+    <PlayerExePublish>$(MSBuildThisFileDirectory)..\PVZ.Player\bin\$(Configuration)\net10.0-windows\$(_PlayerRidSuffix)publish\PVZ.Player.exe</PlayerExePublish>
+    <PlayerExeBuild>$(MSBuildThisFileDirectory)..\PVZ.Player\bin\$(Configuration)\net10.0-windows\$(_PlayerRidSuffix)PVZ.Player.exe</PlayerExeBuild>
+    <PlayerTemplateSource Condition="Exists('$(PlayerExePublish)')">$(PlayerExePublish)</PlayerTemplateSource>
+    <PlayerTemplateSource Condition="'$(PlayerTemplateSource)' == '' and Exists('$(PlayerExeBuild)')">$(PlayerExeBuild)</PlayerTemplateSource>
+  </PropertyGroup>
+
+  <Target Name="PublishPlayerTemplate" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' != '' and '$(PublishDir)' != ''">
+    <PropertyGroup>
+      <_EditorPublishDir>$([MSBuild]::EnsureTrailingSlash('$(PublishDir)'))</_EditorPublishDir>
+      <_PlayerPublishDir>$(MSBuildThisFileDirectory)..\PVZ.Player\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\publish\</_PlayerPublishDir>
+      <_PlayerTemplateExe>$(_PlayerPublishDir)PVZ.Player.exe</_PlayerTemplateExe>
+    </PropertyGroup>
+    <MSBuild
+      Projects="$(PlayerProject)"
+      Targets="Publish"
+      Properties="Configuration=$(Configuration);RuntimeIdentifier=$(RuntimeIdentifier);SelfContained=true;PublishSingleFile=true;PublishDir=$(_PlayerPublishDir);PublishProfile=" />
+    <MakeDir Directories="$(_EditorPublishDir)PlayerTemplate" />
+    <Copy
+      SourceFiles="$(_PlayerTemplateExe)"
+      DestinationFiles="$(_EditorPublishDir)PlayerTemplate\PVZ.Player.exe"
+      SkipUnchangedFiles="true"
+      Condition="Exists('$(_PlayerTemplateExe)')" />
+  </Target>
+
+  <Target Name="CopyPlayerTemplate" AfterTargets="Build" Condition="'$(PublishDir)' == ''">
+    <MSBuild
+      Projects="$(PlayerProject)"
+      Targets="Build"
+      Properties="Configuration=$(Configuration);RuntimeIdentifier=$(RuntimeIdentifier)"
+      Condition="'$(PlayerTemplateSource)' == ''" />
+    <PropertyGroup>
+      <_DevPlayerTemplate Condition="Exists('$(PlayerExeBuild)')">$(PlayerExeBuild)</_DevPlayerTemplate>
+      <_DevPlayerTemplate Condition="'$(_DevPlayerTemplate)' == '' and Exists('$(PlayerExePublish)')">$(PlayerExePublish)</_DevPlayerTemplate>
+    </PropertyGroup>
+    <PropertyGroup>
+      <_DevTemplateDestDir>$([MSBuild]::EnsureTrailingSlash('$(OutDir)'))</_DevTemplateDestDir>
+    </PropertyGroup>
+    <MakeDir Directories="$(_DevTemplateDestDir)PlayerTemplate" Condition="'$(_DevPlayerTemplate)' != ''" />
+    <Copy
+      SourceFiles="$(_DevPlayerTemplate)"
+      DestinationFiles="$(_DevTemplateDestDir)PlayerTemplate\PVZ.Player.exe"
+      SkipUnchangedFiles="true"
+      Condition="'$(_DevPlayerTemplate)' != ''" />
+  </Target>
 
 </Project>
