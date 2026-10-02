@@ -1,0 +1,6 @@
+<Project>
+  <!-- .NET 10 enables CET by default; some Windows 10 installs fail at startup (0x80131506). -->
+  <PropertyGroup>
+    <CetCompat>false</CetCompat>
+  </PropertyGroup>
+</Project>
