@@ -1,5 +1,20 @@
 namespace PVZ.Core;
 
+public enum TaskScoringMode
+{
+    WeightedPoints,
+    Percentage,
+}
+
+public enum SolutionLanguage
+{
+    Cpp,
+    CSharp,
+    Python,
+    Pascal,
+    OneC,
+}
+
 public sealed class TestCaseDto
 {
     public string Input { get; set; } = "";
@@ -12,6 +27,7 @@ public sealed class TaskbookTaskDto
 {
     public string Description { get; set; } = "";
     public int BonusPointsForAllTests { get; set; } = 10;
+    public TaskScoringMode ScoringMode { get; set; } = TaskScoringMode.WeightedPoints;
     public List<TestCaseDto> Tests { get; set; } = new();
 }
 

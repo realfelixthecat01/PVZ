@@ -5,16 +5,15 @@ namespace PVZ.Player;
 
 internal sealed class MainForm : Form
 {
-    private static readonly Color CanvasColor = Color.FromArgb(244, 246, 249);
-    private static readonly Color SurfaceColor = Color.White;
-    private static readonly Color InkColor = Color.FromArgb(30, 41, 59);
-    private static readonly Color MutedColor = Color.FromArgb(100, 116, 139);
-    private static readonly Color BorderColor = Color.FromArgb(218, 226, 235);
-    private static readonly Color AccentColor = Color.FromArgb(37, 99, 165);
-
+    private AppSettings _settings = new();
+    private Color CanvasColor => ThemePalette.From(_settings).Canvas;
+    private Color SurfaceColor => ThemePalette.From(_settings).Surface;
+    private Color InkColor => ThemePalette.From(_settings).Ink;
+    private Color MutedColor => ThemePalette.From(_settings).Muted;
     private readonly TaskbookDocument _document;
     private readonly TabControl _tabs;
     private readonly List<TaskWorkspaceControl> _taskViews = new();
+    private readonly IReadOnlyList<LanguageRuntimeInfo> _languageRuntimes;
     private ListView _resultsList = null!;
     private CheckedListBox _teacherTasks = null!;
     private TextBox _teacherPassword = null!;
@@ -30,6 +29,7 @@ internal sealed class MainForm : Form
     private Label _totalScoreLabel = null!;
     private bool _allowClose;
     private bool _explorerStopped;
+    private Button _settingsButton = null!;
 
     public MainForm()
     {
@@ -50,7 +50,9 @@ internal sealed class MainForm : Form
             // optional window icon
         }
 
+        _settings = LoadSettings();
         _document = EmbeddedTaskbook.LoadForRunningApp();
+        _languageRuntimes = SolutionRunner.DetectRuntimes();
         MinimumSize = new Size(900, 600);
         ClientSize = new Size(1180, 780);
         BackColor = CanvasColor;
@@ -73,85 +75,74 @@ internal sealed class MainForm : Form
         BuildTeacherTab();
 
         Controls.Add(_tabs);
-        ApplyVisualStyle(this);
+        var topBar = new Panel { Dock = DockStyle.Top, Height = 48, Padding = new Padding(16, 6, 16, 6), Tag = "canvas" };
+        var brand = new Label
+        {
+            Text = "PVZ  /  ТЕСТИРОВАНИЕ",
+            AutoSize = true,
+            Location = new Point(16, 14),
+            Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+            ForeColor = MutedColor,
+            Tag = "muted",
+        };
+        _settingsButton = new Button
+        {
+            Text = "Настройки",
+            Size = new Size(120, 34),
+            Location = new Point(ClientSize.Width - 136, 7),
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            Tag = "primary",
+        };
+        _settingsButton.Click += (_, _) => OpenSettings();
+        topBar.Controls.Add(brand);
+        topBar.Controls.Add(_settingsButton);
+        Controls.Add(topBar);
+        ThemeStyler.Apply(this, _settings);
         _lastSelectedTab = _tabs.SelectedTab;
         ApplySequentialUnlock();
+        Shown += (_, _) => ApplyMusicPreference(showErrors: true);
+        FormClosed += (_, _) => BackgroundMusicPlayer.Stop();
     }
 
-    private static void ApplyVisualStyle(Control parent)
+    private static AppSettings LoadSettings()
     {
-        foreach (Control control in parent.Controls)
+        try
         {
-            switch (control)
-            {
-                case TabControl:
-                    control.BackColor = CanvasColor;
-                    break;
-                case TabPage:
-                    control.BackColor = SurfaceColor;
-                    control.ForeColor = InkColor;
-                    break;
-                case TableLayoutPanel tableLayout when tableLayout.BackColor == SystemColors.Control:
-                    tableLayout.BackColor = CanvasColor;
-                    break;
-                case FlowLayoutPanel flowLayout when flowLayout.BackColor == SystemColors.Control:
-                    flowLayout.BackColor = CanvasColor;
-                    break;
-                case GroupBox groupBox when groupBox.BackColor == SystemColors.Control:
-                    groupBox.BackColor = SurfaceColor;
-                    groupBox.ForeColor = InkColor;
-                    break;
-                case Panel panel when panel.BackColor == SystemColors.Control:
-                    panel.BackColor = CanvasColor;
-                    break;
-                case TextBox textBox:
-                    textBox.BorderStyle = BorderStyle.FixedSingle;
-                    if (textBox.Name is "codeEditor" or "outputBox")
-                    {
-                        textBox.BackColor = Color.FromArgb(24, 34, 49);
-                        textBox.ForeColor = Color.FromArgb(226, 232, 240);
-                    }
-                    else
-                    {
-                        textBox.BackColor = SurfaceColor;
-                        textBox.ForeColor = InkColor;
-                    }
-                    break;
-                case Button button:
-                    button.FlatStyle = FlatStyle.Flat;
-                    button.FlatAppearance.BorderColor = BorderColor;
-                    button.BackColor = Color.FromArgb(237, 242, 248);
-                    button.ForeColor = InkColor;
-                    button.Cursor = Cursors.Hand;
-                    if (button.Text.Contains("Начать", StringComparison.OrdinalIgnoreCase) ||
-                        button.Text.Contains("Засчитать", StringComparison.OrdinalIgnoreCase) ||
-                        button.Text.Contains("провер", StringComparison.OrdinalIgnoreCase))
-                    {
-                        button.BackColor = AccentColor;
-                        button.ForeColor = Color.White;
-                        button.FlatAppearance.BorderColor = AccentColor;
-                        button.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-                    }
-                    break;
-                case Label label:
-                    if (!label.Text.StartsWith("Задач в задачнике:", StringComparison.Ordinal))
-                        label.ForeColor = InkColor;
-                    break;
-                case ListView listView:
-                    listView.BackColor = SurfaceColor;
-                    listView.ForeColor = InkColor;
-                    listView.BorderStyle = BorderStyle.FixedSingle;
-                    listView.GridLines = true;
-                    break;
-                case CheckedListBox checkedListBox:
-                    checkedListBox.BackColor = SurfaceColor;
-                    checkedListBox.ForeColor = InkColor;
-                    checkedListBox.BorderStyle = BorderStyle.FixedSingle;
-                    break;
-            }
+            return SettingsStore.Load();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            MessageBox.Show(
+                $"Не удалось прочитать настройки PVZ. Будут использованы значения по умолчанию.\n{ex.Message}",
+                "Настройки PVZ",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return new AppSettings();
+        }
+    }
 
-            if (control.HasChildren)
-                ApplyVisualStyle(control);
+    private void OpenSettings()
+    {
+        using var dialog = new SettingsDialog(_settings);
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+            _settings = dialog.ResultSettings;
+
+        ThemeStyler.Apply(this, _settings);
+        ApplyMusicPreference(showErrors: dialog.DialogResult == DialogResult.OK);
+    }
+
+    private void ApplyMusicPreference(bool showErrors)
+    {
+        if (!_settings.MusicEnabled)
+        {
+            BackgroundMusicPlayer.Stop();
+            return;
+        }
+
+        if (!BackgroundMusicPlayer.TryPlay(_settings.MusicFilePath, _settings.MusicVolume, out var error) &&
+            showErrors)
+        {
+            MessageBox.Show(this, error, "Фоновая музыка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -165,6 +156,8 @@ internal sealed class MainForm : Form
 
         if (_explorerStopped)
             ExplorerHost.Restart();
+
+        BackgroundMusicPlayer.Stop();
     }
 
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
@@ -314,6 +307,7 @@ internal sealed class MainForm : Form
             Text = "Начать тест",
             AutoSize = true,
             Height = 42,
+            Tag = "primary",
         };
         btnStart.Click += (_, _) =>
         {
@@ -366,7 +360,13 @@ internal sealed class MainForm : Form
         for (var i = 0; i < _document.Tasks.Count; i++)
         {
             var page = new TabPage($"Задача {i + 1}");
-            var view = new TaskWorkspaceControl(_document.Tasks[i], i, () => _testStarted, RefreshResults);
+            var view = new TaskWorkspaceControl(
+                _document.Tasks[i],
+                i,
+                _settings,
+                _languageRuntimes,
+                () => _testStarted,
+                RefreshResults);
             _taskViews.Add(view);
             page.Controls.Add(view);
             _tabs.TabPages.Add(page);

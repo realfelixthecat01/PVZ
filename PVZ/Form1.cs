@@ -16,22 +16,24 @@ namespace PVZ
         private Label _headerEyebrow = null!;
         private Label _headerTitle = null!;
         private Label _headerSubtitle = null!;
+        private Button _settingsButton = null!;
         private FlowLayoutPanel _taskTabsFlow = null!;
         private bool _layingOutTests;
+        private AppSettings _settings = new();
         private const int TaskTabRowHeight = 30;
         private const string TestRemoveButtonTag = "test-remove";
         private const int TestCloseButtonReserve = 26;
 
-        private static readonly Color CanvasColor = Color.FromArgb(244, 246, 249);
-        private static readonly Color SurfaceColor = Color.White;
-        private static readonly Color InkColor = Color.FromArgb(30, 41, 59);
-        private static readonly Color MutedColor = Color.FromArgb(100, 116, 139);
-        private static readonly Color BorderColor = Color.FromArgb(218, 226, 235);
-        private static readonly Color AccentColor = Color.FromArgb(37, 99, 165);
+        private Color CanvasColor => ThemePalette.From(_settings).Canvas;
+        private Color SurfaceColor => ThemePalette.From(_settings).Surface;
+        private Color InkColor => ThemePalette.From(_settings).Ink;
+        private Color MutedColor => ThemePalette.From(_settings).Muted;
+        private Color AccentColor => ThemePalette.From(_settings).Accent;
 
         public Form1()
         {
             InitializeComponent();
+            _settings = LoadSettings();
             MinimumSize = new Size(1000, 680);
             ClientSize = new Size(1120, 720);
             BackColor = CanvasColor;
@@ -39,19 +41,22 @@ namespace PVZ
             Font = new Font("Segoe UI", 9.5F);
             SetupUi();
             Resize += (_, _) => LayoutEditor();
+            Shown += (_, _) => ApplyMusicPreference(showErrors: true);
+            FormClosed += (_, _) => BackgroundMusicPlayer.Stop();
             WireEvents();
 
             var firstTask = new TaskbookTaskDto
             {
                 Description = textBox1.Text,
-                BonusPointsForAllTests = ParseIntOrDefault(textBox5.Text, 10),
+                ScoringMode = TaskScoringMode.Percentage,
+                BonusPointsForAllTests = 0,
             };
             firstTask.Tests.Add(new TestCaseDto
             {
                 Input = textBox2.Text,
                 Output = textBox3.Text,
                 ShowToStudent = checkBox4.Checked,
-                Points = ParseIntOrDefault(textBox6.Text, 25),
+                Points = 0,
             });
             _tasks.Add(firstTask);
 
@@ -68,21 +73,30 @@ namespace PVZ
             textBox1.PlaceholderText = "Введите условие задачи...";
             label1.Text = "УСЛОВИЕ ЗАДАЧИ";
             label2.Text = "ТЕСТОВЫЕ ПРИМЕРЫ";
+            label1.Tag = "heading";
+            label2.Tag = "heading";
             button2.Text = "+  Добавить тест";
 
             button3.Visible = false;
+            button1.Tag = "primary";
+            label1.Tag = "heading";
+            label2.Tag = "heading";
             panel1.BorderStyle = BorderStyle.None;
+            panel1.Tag = "nav";
             panel1.BackColor = InkColor;
             panel2.BorderStyle = BorderStyle.None;
+            panel2.Tag = "surface";
             panel2.BackColor = SurfaceColor;
             panel3.BorderStyle = BorderStyle.None;
-            panel3.BackColor = Color.FromArgb(247, 249, 252);
+            panel3.Tag = "subtle";
+            panel3.BackColor = ThemePalette.From(_settings).SubtleSurface;
 
             _headerPanel = new Panel { BackColor = CanvasColor };
-            _headerAccent = new Panel { BackColor = AccentColor };
+            _headerAccent = new Panel { BackColor = AccentColor, Tag = "accent" };
             _headerEyebrow = new Label
             {
                 Name = "headerEyebrow",
+                Tag = "accent",
                 Text = "КОНСТРУКТОР ТЕСТИРОВАНИЯ",
                 AutoSize = true,
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
@@ -91,6 +105,7 @@ namespace PVZ
             _headerTitle = new Label
             {
                 Name = "headerTitle",
+                Tag = "heading",
                 Text = "Пункт выдачи задач",
                 AutoSize = true,
                 Font = new Font("Segoe UI", 20F, FontStyle.Bold),
@@ -99,12 +114,22 @@ namespace PVZ
             _headerSubtitle = new Label
             {
                 Name = "headerSubtitle",
+                Tag = "muted",
                 Text = "Подготовьте условие, тесты и параметры нового задачника",
                 AutoSize = true,
                 Font = new Font("Segoe UI", 9.5F),
                 ForeColor = MutedColor,
             };
             _headerPanel.Controls.AddRange([_headerAccent, _headerEyebrow, _headerTitle, _headerSubtitle]);
+            _settingsButton = new Button
+            {
+                Text = "Настройки",
+                Size = new Size(128, 36),
+                Tag = "primary",
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            };
+            _settingsButton.Click += (_, _) => OpenSettings();
+            _headerPanel.Controls.Add(_settingsButton);
             Controls.Add(_headerPanel);
 
             _taskTabsScroll = new Panel
@@ -140,7 +165,7 @@ namespace PVZ
             _testsFlow.ControlAdded += (_, _) => ScheduleLayoutTestPanels();
             _testsFlow.ControlRemoved += (_, _) => ScheduleLayoutTestPanels();
             panel3.Controls.Add(_testsFlow);
-            StyleEditorControls(this);
+            ThemeStyler.Apply(this, _settings);
             LayoutEditor();
             _headerPanel.BringToFront();
         }
@@ -167,6 +192,7 @@ namespace PVZ
             _headerEyebrow.Location = new Point(14, 3);
             _headerTitle.Location = new Point(12, 14);
             _headerSubtitle.Location = new Point(14, 45);
+            _settingsButton.Location = new Point(_headerPanel.ClientSize.Width - _settingsButton.Width, 14);
 
             panel1.SetBounds(margin, tabsTop, contentWidth, tabsHeight);
             panel2.SetBounds(margin, contentTop, contentWidth, contentHeight);
@@ -199,57 +225,49 @@ namespace PVZ
             LayoutTestPanels();
         }
 
-        private static void StyleEditorControls(Control parent)
+        private static AppSettings LoadSettings()
         {
-            foreach (Control control in parent.Controls)
+            try
             {
-                if (control.Name is not ("headerEyebrow" or "headerTitle" or "headerSubtitle"))
-                    control.Font = new Font("Segoe UI", 9.5F);
-                control.ForeColor = InkColor;
+                return SettingsStore.Load();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                MessageBox.Show(
+                    $"Не удалось прочитать настройки PVZ. Будут использованы значения по умолчанию.\n{ex.Message}",
+                    "Настройки PVZ",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return new AppSettings();
+            }
+        }
 
-                switch (control)
-                {
-                    case TextBox textBox:
-                        textBox.BorderStyle = BorderStyle.FixedSingle;
-                        textBox.BackColor = SurfaceColor;
-                        break;
-                    case Button button:
-                        button.FlatStyle = FlatStyle.Flat;
-                        button.FlatAppearance.BorderColor = BorderColor;
-                        button.BackColor = Color.FromArgb(237, 242, 248);
-                        button.Cursor = Cursors.Hand;
-                        button.Height = Math.Max(button.Height, 30);
-                        if (button.Name == "button1")
-                        {
-                            button.BackColor = AccentColor;
-                            button.ForeColor = Color.White;
-                            button.FlatAppearance.BorderColor = AccentColor;
-                            button.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-                        }
-                        break;
-                    case Label label:
-                        label.ForeColor = MutedColor;
-                        if (label.Name == "headerTitle")
-                        {
-                            label.ForeColor = InkColor;
-                        }
-                        else if (label.Name == "headerEyebrow")
-                        {
-                            label.ForeColor = AccentColor;
-                        }
-                        else if (label.Name == "label1" || label.Name == "label2")
-                        {
-                            label.ForeColor = InkColor;
-                            label.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
-                        }
-                        break;
-                    case CheckBox:
-                        control.ForeColor = MutedColor;
-                        break;
-                }
+        private void OpenSettings()
+        {
+            using var dialog = new SettingsDialog(_settings);
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+                _settings = dialog.ResultSettings;
 
-                if (control.HasChildren)
-                    StyleEditorControls(control);
+            ThemeStyler.Apply(this, _settings);
+            foreach (var tab in _taskTabButtons)
+                ThemeStyler.Apply(tab, _settings);
+
+            ApplyMusicPreference(showErrors: dialog.DialogResult == DialogResult.OK);
+            LayoutEditor();
+        }
+
+        private void ApplyMusicPreference(bool showErrors)
+        {
+            if (!_settings.MusicEnabled)
+            {
+                BackgroundMusicPlayer.Stop();
+                return;
+            }
+
+            if (!BackgroundMusicPlayer.TryPlay(_settings.MusicFilePath, _settings.MusicVolume, out var error) &&
+                showErrors)
+            {
+                MessageBox.Show(this, error, "Фоновая музыка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
@@ -268,7 +286,10 @@ namespace PVZ
         {
             SaveCurrentTaskFromUi();
             _tasks.Add(new TaskbookTaskDto());
+            _tasks[^1].ScoringMode = TaskScoringMode.Percentage;
+            _tasks[^1].BonusPointsForAllTests = 0;
             _tasks[^1].Tests.Add(new TestCaseDto());
+            _tasks[^1].Tests[0].Points = 0;
             _currentTaskIndex = _tasks.Count - 1;
             RebuildTaskTabs();
             LoadTaskToUi(_currentTaskIndex);
@@ -314,6 +335,7 @@ namespace PVZ
                     ForeColor = Color.White,
                     Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
                     Cursor = Cursors.Hand,
+                    Tag = "nav",
                 };
                 tab.FlatAppearance.BorderSize = 0;
                 tab.Click += (_, _) => SelectTask(index);
@@ -329,6 +351,7 @@ namespace PVZ
                     BackColor = Color.FromArgb(54, 65, 82),
                     ForeColor = Color.White,
                     Cursor = Cursors.Hand,
+                    Tag = "nav",
                 };
                 removeTask.Click += (_, _) => DeleteTask(index);
 
@@ -373,10 +396,8 @@ namespace PVZ
             {
                 var selected = i == _currentTaskIndex;
                 _taskTabButtons[i].Font = new Font(_taskTabButtons[i].Font, selected ? FontStyle.Bold : FontStyle.Regular);
-                _taskTabButtons[i].FlatStyle = FlatStyle.Flat;
-                _taskTabButtons[i].FlatAppearance.BorderSize = 0;
-                _taskTabButtons[i].BackColor = selected ? Color.FromArgb(53, 105, 164) : InkColor;
-                _taskTabButtons[i].ForeColor = Color.White;
+                _taskTabButtons[i].Tag = selected ? "selected-nav" : "nav";
+                ThemeStyler.Apply(_taskTabButtons[i], _settings);
             }
 
             if (_currentTaskIndex >= 0 && _currentTaskIndex < _taskTabButtons.Count)
@@ -391,6 +412,10 @@ namespace PVZ
             label1.Text = $"Условие задачи №{index + 1}:";
             textBox1.Text = task.Description;
             textBox5.Text = task.BonusPointsForAllTests.ToString();
+            label4.Text = task.ScoringMode == TaskScoringMode.Percentage
+                ? "Равный вес тестов • оценка 0–100"
+                : "Бонус за выполнение всех тестов:";
+            textBox5.Visible = task.ScoringMode == TaskScoringMode.WeightedPoints;
 
             _testsFlow.SuspendLayout();
             _testsFlow.Controls.Clear();
@@ -440,6 +465,7 @@ namespace PVZ
         {
             SaveCurrentTaskFromUi();
             var test = new TestCaseDto();
+            test.Points = 0;
             _tasks[_currentTaskIndex].Tests.Add(test);
             _testsFlow.Controls.Add(CreateTestPanel(test));
             LayoutTestPanels();
@@ -554,6 +580,7 @@ namespace PVZ
                 BackColor = SurfaceColor,
                 Margin = new Padding(0, 0, 0, 6),
                 Tag = test,
+                AccessibleDescription = "card",
             };
 
             var remove = new Button
@@ -574,6 +601,7 @@ namespace PVZ
             var inputLabel = new Label
             {
                 Text = "ВВОД",
+                Tag = "muted",
                 AutoSize = true,
                 Font = new Font("Segoe UI", 8F, FontStyle.Bold),
                 ForeColor = MutedColor,
@@ -582,6 +610,7 @@ namespace PVZ
             var outputLabel = new Label
             {
                 Text = "РЕЗУЛЬТАТ",
+                Tag = "muted",
                 AutoSize = true,
                 Font = new Font("Segoe UI", 8F, FontStyle.Bold),
                 ForeColor = MutedColor,
@@ -617,9 +646,11 @@ namespace PVZ
             var pointsLabel = new Label
             {
                 Text = "Баллы:",
+                Tag = "muted",
                 AutoSize = true,
                 Location = new Point(128, 82),
                 ForeColor = MutedColor,
+                Visible = _tasks[_currentTaskIndex].ScoringMode == TaskScoringMode.WeightedPoints,
             };
             var points = new TextBox
             {
@@ -628,6 +659,7 @@ namespace PVZ
                 Size = new Size(38, 23),
                 Text = test.Points > 0 ? test.Points.ToString() : "",
                 BorderStyle = BorderStyle.FixedSingle,
+                Visible = _tasks[_currentTaskIndex].ScoringMode == TaskScoringMode.WeightedPoints,
             };
 
             void Bind()
@@ -635,7 +667,9 @@ namespace PVZ
                 test.Input = input.Text;
                 test.Output = output.Text;
                 test.ShowToStudent = show.Checked;
-                test.Points = ParseIntOrDefault(points.Text, 25);
+                test.Points = _tasks[_currentTaskIndex].ScoringMode == TaskScoringMode.Percentage
+                    ? 0
+                    : ParseIntOrDefault(points.Text, 25);
             }
 
             input.TextChanged += (_, _) => Bind();
@@ -651,6 +685,7 @@ namespace PVZ
             panel.Controls.Add(pointsLabel);
             panel.Controls.Add(points);
             panel.Controls.Add(remove);
+            ThemeStyler.Apply(panel, _settings);
 
             return panel;
         }
@@ -668,7 +703,7 @@ namespace PVZ
                         test.Output = tb.Text;
                         break;
                     case TextBox tb when tb.PlaceholderText == "25" && !tb.Multiline:
-                        test.Points = ParseIntOrDefault(tb.Text, 25);
+                        test.Points = tb.Visible ? ParseIntOrDefault(tb.Text, 25) : 0;
                         break;
                     case CheckBox cb:
                         test.ShowToStudent = cb.Checked;

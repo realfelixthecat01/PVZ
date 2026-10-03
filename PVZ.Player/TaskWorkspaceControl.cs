@@ -4,28 +4,40 @@ namespace PVZ.Player;
 
 internal sealed class TaskWorkspaceControl : UserControl
 {
-    private static readonly Color CanvasColor = Color.FromArgb(244, 246, 249);
-    private static readonly Color SurfaceColor = Color.White;
-    private static readonly Color InkColor = Color.FromArgb(30, 41, 59);
-    private static readonly Color MutedColor = Color.FromArgb(100, 116, 139);
-    private static readonly Color BorderColor = Color.FromArgb(218, 226, 235);
-    private static readonly Color AccentColor = Color.FromArgb(37, 99, 165);
+    private readonly ThemePalette _palette;
+    private Color CanvasColor => _palette.Canvas;
+    private Color SurfaceColor => _palette.Surface;
+    private Color InkColor => _palette.Ink;
+    private Color MutedColor => _palette.Muted;
+    private Color BorderColor => _palette.Border;
+    private Color AccentColor => _palette.Accent;
 
     private readonly TaskbookTaskDto _task;
     private readonly int _taskIndex;
     private readonly Func<bool> _canRunTests;
     private readonly Action? _onProgressChanged;
+    private readonly IReadOnlyList<LanguageRuntimeInfo> _languageRuntimes;
+    private LanguageRuntimeInfo _selectedRuntime = null!;
 
     private readonly TextBox _codeEditor;
     private readonly TextBox _outputBox;
     private readonly Button _btnTest;
+    private readonly ComboBox _languageSelector;
 
     public TaskProgress Progress { get; } = new();
 
-    public TaskWorkspaceControl(TaskbookTaskDto task, int taskIndex, Func<bool> canRunTests, Action? onProgressChanged = null)
+    public TaskWorkspaceControl(
+        TaskbookTaskDto task,
+        int taskIndex,
+        AppSettings settings,
+        IReadOnlyList<LanguageRuntimeInfo> languageRuntimes,
+        Func<bool> canRunTests,
+        Action? onProgressChanged = null)
     {
         _task = task;
         _taskIndex = taskIndex;
+        _palette = ThemePalette.From(settings);
+        _languageRuntimes = languageRuntimes;
         _canRunTests = canRunTests;
         _onProgressChanged = onProgressChanged;
         Dock = DockStyle.Fill;
@@ -43,9 +55,36 @@ internal sealed class TaskWorkspaceControl : UserControl
 
         var btnShowCondition = CreateButton("Показать условие");
         _btnTest = CreateButton("Запустить проверку", primary: true);
+        var languageLabel = new Label
+        {
+            Text = "Язык:",
+            AutoSize = true,
+            Padding = new Padding(0, 8, 0, 0),
+            ForeColor = MutedColor,
+        };
+        _languageSelector = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Width = 360,
+            Margin = new Padding(0, 2, 8, 0),
+        };
+        foreach (var runtime in _languageRuntimes)
+            _languageSelector.Items.Add(runtime);
+        _selectedRuntime = _languageRuntimes.FirstOrDefault(runtime =>
+                               runtime.Language == SolutionLanguage.Python && runtime.IsAvailable)
+                           ?? _languageRuntimes.FirstOrDefault(runtime => runtime.IsAvailable)
+                           ?? _languageRuntimes.First(runtime => runtime.Language == SolutionLanguage.Python);
+        _languageSelector.SelectedItem = _selectedRuntime;
+        _languageSelector.SelectedIndexChanged += (_, _) =>
+        {
+            if (_languageSelector.SelectedItem is LanguageRuntimeInfo runtime)
+                _selectedRuntime = runtime;
+        };
         btnShowCondition.Click += (_, _) => ShowCondition();
         _btnTest.Click += async (_, _) => await RunTestsAsync();
 
+        top.Controls.Add(languageLabel);
+        top.Controls.Add(_languageSelector);
         top.Controls.Add(btnShowCondition);
         top.Controls.Add(_btnTest);
 
@@ -122,15 +161,16 @@ internal sealed class TaskWorkspaceControl : UserControl
         Controls.Add(top);
     }
 
-    private static Button CreateButton(string text, bool primary = false) => new()
+    private Button CreateButton(string text, bool primary = false) => new()
     {
         Text = text,
         AutoSize = true,
         Height = 36,
         Padding = new Padding(12, 0, 12, 0),
         FlatStyle = FlatStyle.Flat,
+        Tag = primary ? "primary" : null,
         BackColor = primary ? AccentColor : SurfaceColor,
-        ForeColor = primary ? Color.White : InkColor,
+        ForeColor = primary ? _palette.AccentText : InkColor,
         Font = new Font("Segoe UI", 9.5F, primary ? FontStyle.Bold : FontStyle.Regular),
         Cursor = Cursors.Hand,
         FlatAppearance = { BorderColor = primary ? AccentColor : BorderColor },
@@ -178,6 +218,7 @@ internal sealed class TaskWorkspaceControl : UserControl
                     Height = 126,
                     BorderStyle = BorderStyle.FixedSingle,
                     BackColor = Color.FromArgb(248, 250, 252),
+                    Tag = "card",
                     Margin = new Padding(0, 0, 0, 6),
                 };
 
@@ -249,56 +290,123 @@ internal sealed class TaskWorkspaceControl : UserControl
         _outputBox.Clear();
         Progress.Reset();
 
-        var code = _codeEditor.Text;
-        if (string.IsNullOrWhiteSpace(code))
+        try
         {
-            _outputBox.Text = "Введите код Python.";
+            if (_task.Tests.Count == 0)
+            {
+                _outputBox.Text = "У задачи нет тестов, поэтому оценка не выставлена.";
+                _onProgressChanged?.Invoke();
+                return;
+            }
+
+            if (!_selectedRuntime.IsAvailable)
+            {
+                _outputBox.Text = $"Язык «{_selectedRuntime.DisplayName}» недоступен: {_selectedRuntime.Status}.\n" +
+                                  "Установите или настройте runtime самостоятельно, затем перезапустите задачник.";
+                _onProgressChanged?.Invoke();
+                return;
+            }
+
+            var code = _codeEditor.Text;
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                _outputBox.Text = "Введите код на выбранном языке.";
+                _onProgressChanged?.Invoke();
+                return;
+            }
+
+            var batch = await SolutionRunner.RunAllAsync(
+                _selectedRuntime,
+                code,
+                _task.Tests.Select(test => test.Input).ToList());
+
+            if (!batch.RuntimeAvailable)
+            {
+                _outputBox.Text = batch.ErrorMessage ?? $"Runtime недоступен: {_selectedRuntime.Status}";
+                _onProgressChanged?.Invoke();
+                return;
+            }
+
+            var visibleTests = _task.Tests
+                .Select((test, index) => (test, result: batch.Tests[index], index))
+                .Where(item => item.test.ShowToStudent)
+                .ToList();
+            var passedTests = Enumerable.Range(0, batch.Tests.Count).Count(index =>
+                batch.Tests[index].Success &&
+                PythonRunner.NormalizeOutput(batch.Tests[index].StandardOutput) ==
+                PythonRunner.NormalizeOutput(_task.Tests[index].Output));
+            var allPassed = _task.Tests.Count > 0 && passedTests == _task.Tests.Count;
+            Progress.Completed = allPassed;
+
+            if (_task.ScoringMode == TaskScoringMode.Percentage)
+            {
+                Progress.EarnedPoints = TaskbookScoring.CalculatePercentageScore(passedTests, _task.Tests.Count);
+            }
+            else
+            {
+                for (var i = 0; i < batch.Tests.Count; i++)
+                {
+                    var result = batch.Tests[i];
+                    if (result.Success &&
+                        PythonRunner.NormalizeOutput(result.StandardOutput) ==
+                        PythonRunner.NormalizeOutput(_task.Tests[i].Output))
+                        Progress.EarnedPoints += _task.Tests[i].Points;
+                }
+
+                if (Progress.Completed)
+                    Progress.EarnedPoints += _task.BonusPointsForAllTests;
+            }
+
+            Progress.EarnedPoints = Math.Min(Progress.EarnedPoints, TaskbookScoring.GetTaskMaxScore(_task));
+
+            var lines = new List<string>();
+            if (batch.ErrorMessage != null)
+                lines.Add(batch.ErrorMessage);
+
+            if (visibleTests.Count == 0)
+            {
+                lines.Add("Скрытые тесты проверены. Детали не показываются.");
+            }
+            else if (batch.ErrorMessage == null)
+            {
+                foreach (var (test, result, index) in visibleTests)
+                {
+                    lines.Add($"--- Тест {index + 1} (ввод: {test.Input.Replace("\n", "\\n")}) ---");
+                    if (!string.IsNullOrEmpty(result.ErrorMessage))
+                        lines.Add(result.ErrorMessage);
+                    if (!string.IsNullOrEmpty(result.StandardError))
+                        lines.Add(result.StandardError);
+                    lines.Add($"Вывод:\n{result.StandardOutput}");
+
+                    var passed = result.Success &&
+                                 PythonRunner.NormalizeOutput(result.StandardOutput) ==
+                                 PythonRunner.NormalizeOutput(test.Output);
+                    if (passed)
+                        lines.Add(_task.ScoringMode == TaskScoringMode.Percentage
+                            ? "Тест пройден."
+                            : $"OK (+{test.Points} баллов)");
+                    else
+                        lines.Add($"Ошибка. Ожидалось:\n{test.Output}");
+                    lines.Add("");
+                }
+            }
+
+            lines.Add(_task.ScoringMode == TaskScoringMode.Percentage
+                ? $"Автооценка: {Progress.EarnedPoints}/100 ({passedTests} из {_task.Tests.Count} тестов)."
+                : $"Баллы за задачу: {Progress.EarnedPoints}/{TaskbookScoring.GetTaskMaxScore(_task)}.");
+            _outputBox.Text = string.Join(Environment.NewLine, lines);
+            _onProgressChanged?.Invoke();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
+        {
+            Progress.Reset();
+            _outputBox.Text = $"Не удалось выполнить решение.\n{ex.Message}";
+            _onProgressChanged?.Invoke();
+        }
+        finally
+        {
             _btnTest.Enabled = true;
-            return;
         }
-
-        var lines = new List<string>();
-        var visibleTests = _task.Tests.Where(t => t.ShowToStudent).ToList();
-        var allPassed = true;
-        Progress.EarnedPoints = 0;
-
-        foreach (var test in _task.Tests)
-        {
-            var result = await PythonRunner.RunAsync(code, test.Input);
-            var actual = PythonRunner.NormalizeOutput(result.StandardOutput);
-            var expected = PythonRunner.NormalizeOutput(test.Output);
-            var passed = actual == expected && result.Success;
-
-            if (!passed)
-                allPassed = false;
-            if (passed)
-                Progress.EarnedPoints += test.Points;
-
-            if (!test.ShowToStudent)
-                continue;
-
-            lines.Add($"--- Тест (ввод: {test.Input.Replace("\n", "\\n")}) ---");
-            if (!string.IsNullOrEmpty(result.ErrorMessage))
-                lines.Add(result.ErrorMessage);
-            if (!string.IsNullOrEmpty(result.StandardError))
-                lines.Add(result.StandardError);
-            lines.Add($"Вывод:\n{result.StandardOutput}");
-            lines.Add(passed ? $"OK (+{test.Points} баллов)" : $"Ошибка. Ожидалось:\n{test.Output}");
-            lines.Add("");
-        }
-
-        if (visibleTests.Count == 0)
-            lines.Add("Скрытые тесты проверены. Детали не показываются.");
-
-        Progress.Completed = allPassed;
-        if (Progress.Completed)
-            Progress.EarnedPoints += _task.BonusPointsForAllTests;
-
-        Progress.EarnedPoints = Math.Min(Progress.EarnedPoints, TaskbookScoring.GetTaskMaxScore(_task));
-
-        _outputBox.Text = string.Join(Environment.NewLine, lines);
-        _btnTest.Enabled = true;
-        _onProgressChanged?.Invoke();
     }
 
     public void SetTeacherCredited(bool credited) => Progress.TeacherCredited = credited;

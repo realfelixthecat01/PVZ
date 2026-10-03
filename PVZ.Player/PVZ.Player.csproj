@@ -17,6 +17,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\PVZ\SettingsDialog.cs" Link="SettingsDialog.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="taskbook.json" />
   </ItemGroup>
 
