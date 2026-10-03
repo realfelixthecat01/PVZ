@@ -42,7 +42,7 @@ internal sealed class StudentStartForm : Form
     {
         ClearScreen();
         var title = CreateLabel("Получение задачника", 23F, FontStyle.Bold);
-        var subtitle = CreateLabel("Выберите оффлайн-файл или онлайн-доступ по токену.", 10.5F, FontStyle.Regular, Muted);
+        var subtitle = CreateLabel("Оффлайн откроет файл на устройстве; онлайн потребует подключения к серверу.", 10.5F, FontStyle.Regular, Muted);
         var offline = CreateButton("Открыть оффлайн-файл .pvz", primary: true);
         var online = CreateButton("Ввести онлайн-токен", primary: false);
         var back = CreateButton("Назад", primary: false);
@@ -60,7 +60,14 @@ internal sealed class StudentStartForm : Form
     {
         ClearScreen();
         var title = CreateLabel("Онлайн-задачник", 22F, FontStyle.Bold);
-        var subtitle = CreateLabel("Введите токен, выданный учителем.", 10.5F, FontStyle.Regular, Muted);
+        var subtitle = CreateLabel(
+            "Токен должен выдать сервер. Серверной админ-панели и проверки токенов пока нет.\nПароль преподавателя предназначен только учителю: не вводите его здесь и не передавайте ученикам.",
+            10.5F,
+            FontStyle.Regular,
+            Muted);
+        subtitle.AutoSize = false;
+        subtitle.Size = new Size(680, 46);
+        subtitle.TextAlign = ContentAlignment.MiddleCenter;
         var token = new TextBox
         {
             Width = 360,
@@ -83,7 +90,7 @@ internal sealed class StudentStartForm : Form
 
             MessageBox.Show(
                 this,
-                "Онлайн-доступ пока недоступен: сервер для проверки токена ещё не подключён. Попросите учителя передать файл .pvz и откройте его в оффлайн-режиме.",
+                "Онлайн-доступ пока не настроен: токен не проверялся, файл с сервера не загружался. Попросите учителя передать файл .pvz и откройте его в оффлайн-режиме.",
                 Text,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -92,7 +99,7 @@ internal sealed class StudentStartForm : Form
         back.Location = new Point((ClientSize.Width - back.Width) / 2, 360);
         back.Click += (_, _) => ShowSourceChoices();
         AddCentered(title, 105);
-        AddCentered(subtitle, 166);
+        AddCentered(subtitle, 158);
         Controls.Add(token);
         Controls.Add(open);
         Controls.Add(back);

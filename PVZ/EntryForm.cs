@@ -17,11 +17,7 @@ internal sealed class EntryForm : Form
         ClientSize = new Size(560, 360);
         BackColor = Canvas;
         var teacher = CreateRoleButton("Учитель", isPrimary: true);
-        teacher.Click += (_, _) =>
-        {
-            using var builder = new Form1();
-            builder.ShowDialog(this);
-        };
+        teacher.Click += (_, _) => OpenTeacherBuilder();
 
         var student = CreateRoleButton("Ученик", isPrimary: false);
         student.Click += (_, _) => StartStudentApp();
@@ -66,10 +62,25 @@ internal sealed class EntryForm : Form
         try
         {
             Process.Start(new ProcessStartInfo(playerPath) { UseShellExecute = true });
+            Close();
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             MessageBox.Show(this, $"Не удалось запустить приложение ученика: {ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void OpenTeacherBuilder()
+    {
+        Hide();
+        try
+        {
+            using var builder = new Form1();
+            builder.ShowDialog();
+        }
+        finally
+        {
+            Close();
         }
     }
 }

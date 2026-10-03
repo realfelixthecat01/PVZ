@@ -113,7 +113,7 @@ public static class TaskbookPublisher
         }
     }
 
-    public static TaskbookPublishResult PrepareOnlinePackage(string outputPath, TaskbookDocument document) =>
+    public static TaskbookPublishResult PrepareOnlineUploadPackage(string outputPath, TaskbookDocument document) =>
         PublishPackage(outputPath, document);
 
     public static string? FindPlayerTemplate()

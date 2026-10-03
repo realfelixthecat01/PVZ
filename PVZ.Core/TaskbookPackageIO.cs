@@ -73,11 +73,18 @@ public static class TaskbookPackageIO
         using var json = new MemoryStream(documentLength);
         var buffer = new byte[81920];
         int read;
-        while ((read = brotli.Read(buffer, 0, buffer.Length)) > 0)
+        try
         {
-            if (json.Length + read > MaximumDocumentBytes || json.Length + read > documentLength)
-                throw new InvalidDataException("Содержимое задачника превышает допустимый размер.");
-            json.Write(buffer, 0, read);
+            while ((read = brotli.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                if (json.Length + read > MaximumDocumentBytes || json.Length + read > documentLength)
+                    throw new InvalidDataException("Содержимое задачника превышает допустимый размер.");
+                json.Write(buffer, 0, read);
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new InvalidDataException("Файл задачника повреждён или содержит неверные сжатые данные.", ex);
         }
 
         if (json.Length != documentLength)

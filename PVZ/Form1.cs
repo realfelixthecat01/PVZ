@@ -900,7 +900,7 @@ namespace PVZ
             try
             {
                 var result = await Task.Run(() => online
-                    ? TaskbookPublisher.PrepareOnlinePackage(dlg.FileName, document)
+                    ? TaskbookPublisher.PrepareOnlineUploadPackage(dlg.FileName, document)
                     : TaskbookPublisher.PublishPackage(dlg.FileName, document));
                 if (!result.Success)
                 {
@@ -909,8 +909,8 @@ namespace PVZ
                 }
 
                 var message = online
-                    ? "Онлайн-сервер пока не подключён. Файл подготовлен локально; его можно будет загрузить после подключения сервера."
-                    : "Файл задачника сохранён. Передайте его ученику для открытия в оффлайн-режиме.";
+                    ? "Файл .pvz сжат и сохранён только на этом компьютере; контрольная сумма помогает обнаружить повреждение, но файл не зашифрован. Серверной админ-панели, загрузки и выдачи токена пока нет."
+                    : "Файл .pvz сжат и снабжён контрольной суммой, но не зашифрован. Передайте файл ученику для оффлайн-открытия; пароль преподавателя не нужен ученику и остаётся только у вас.";
                 MessageBox.Show(
                     $"{message}\n\n{result.OutputPath}",
                     Text,
