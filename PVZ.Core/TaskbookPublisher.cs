@@ -5,6 +5,7 @@ public sealed class TaskbookPublishResult
     public bool Success { get; init; }
     public string? ErrorMessage { get; init; }
     public string? OutputExePath { get; init; }
+    public string? OutputPath { get; init; }
 }
 
 public static class TaskbookPublisher
@@ -90,6 +91,30 @@ public static class TaskbookPublisher
             OutputExePath = outputExePath,
         };
     }
+
+    public static TaskbookPublishResult PublishPackage(string outputPath, TaskbookDocument document)
+    {
+        try
+        {
+            TaskbookPackageIO.Save(outputPath, document);
+            return new TaskbookPublishResult
+            {
+                Success = true,
+                OutputPath = outputPath,
+            };
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return new TaskbookPublishResult
+            {
+                Success = false,
+                ErrorMessage = $"Не удалось сохранить файл задачника: {ex.Message}",
+            };
+        }
+    }
+
+    public static TaskbookPublishResult PrepareOnlinePackage(string outputPath, TaskbookDocument document) =>
+        PublishPackage(outputPath, document);
 
     public static string? FindPlayerTemplate()
     {

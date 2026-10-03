@@ -1,3 +1,5 @@
+using PVZ.Core;
+
 namespace PVZ.Player;
 
 internal static class Program
@@ -8,7 +10,10 @@ internal static class Program
         ApplicationConfiguration.Initialize();
         try
         {
-            Application.Run(new MainForm());
+            if (EmbeddedTaskbook.TryLoadAppendedForRunningApp(out var document) && document != null)
+                Application.Run(new MainForm(document));
+            else
+                Application.Run(new StudentStartForm());
         }
         catch (Exception ex)
         {

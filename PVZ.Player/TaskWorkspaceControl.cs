@@ -4,12 +4,13 @@ namespace PVZ.Player;
 
 internal sealed class TaskWorkspaceControl : UserControl
 {
-    private static readonly Color CanvasColor = Color.FromArgb(244, 246, 249);
-    private static readonly Color SurfaceColor = Color.White;
-    private static readonly Color InkColor = Color.FromArgb(30, 41, 59);
-    private static readonly Color MutedColor = Color.FromArgb(100, 116, 139);
-    private static readonly Color BorderColor = Color.FromArgb(218, 226, 235);
-    private static readonly Color AccentColor = Color.FromArgb(37, 99, 165);
+    private static readonly Color CanvasColor = Color.FromArgb(17, 24, 39);
+    private static readonly Color SurfaceColor = Color.FromArgb(31, 41, 55);
+    private static readonly Color RaisedSurfaceColor = Color.FromArgb(38, 50, 68);
+    private static readonly Color InkColor = Color.FromArgb(226, 232, 240);
+    private static readonly Color MutedColor = Color.FromArgb(148, 163, 184);
+    private static readonly Color BorderColor = Color.FromArgb(71, 85, 105);
+    private static readonly Color AccentColor = Color.FromArgb(37, 99, 235);
 
     private readonly TaskbookTaskDto _task;
     private readonly int _taskIndex;
@@ -264,7 +265,7 @@ internal sealed class TaskWorkspaceControl : UserControl
                     Width = 420,
                     Height = 126,
                     BorderStyle = BorderStyle.FixedSingle,
-                    BackColor = Color.FromArgb(248, 250, 252),
+                    BackColor = RaisedSurfaceColor,
                     Margin = new Padding(0, 0, 0, 6),
                 };
 
