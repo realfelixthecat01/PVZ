@@ -11,22 +11,34 @@ namespace PVZ
 
         private FlowLayoutPanel _testsFlow = null!;
         private Panel _taskTabsScroll = null!;
+        private Panel _headerPanel = null!;
+        private Panel _headerAccent = null!;
+        private Label _headerEyebrow = null!;
+        private Label _headerTitle = null!;
+        private Label _headerSubtitle = null!;
         private FlowLayoutPanel _taskTabsFlow = null!;
         private bool _layingOutTests;
-        private int _testsScrollBarReserve;
-        private int _basePanel1Width;
-        private int _basePanel2Width;
-        private int _basePanel3Width;
-        private int _baseButton1Left;
-        private int _baseTextBox5Left;
-        private const int TaskTabRowHeight = 23;
+        private const int TaskTabRowHeight = 30;
         private const string TestRemoveButtonTag = "test-remove";
         private const int TestCloseButtonReserve = 26;
+
+        private static readonly Color CanvasColor = Color.FromArgb(244, 246, 249);
+        private static readonly Color SurfaceColor = Color.White;
+        private static readonly Color InkColor = Color.FromArgb(30, 41, 59);
+        private static readonly Color MutedColor = Color.FromArgb(100, 116, 139);
+        private static readonly Color BorderColor = Color.FromArgb(218, 226, 235);
+        private static readonly Color AccentColor = Color.FromArgb(37, 99, 165);
 
         public Form1()
         {
             InitializeComponent();
+            MinimumSize = new Size(1000, 680);
+            ClientSize = new Size(1120, 720);
+            BackColor = CanvasColor;
+            ForeColor = InkColor;
+            Font = new Font("Segoe UI", 9.5F);
             SetupUi();
+            Resize += (_, _) => LayoutEditor();
             WireEvents();
 
             var firstTask = new TaskbookTaskDto
@@ -53,16 +65,52 @@ namespace PVZ
         private void SetupUi()
         {
             textBox4.PasswordChar = '*';
+            textBox1.PlaceholderText = "Введите условие задачи...";
+            label1.Text = "УСЛОВИЕ ЗАДАЧИ";
+            label2.Text = "ТЕСТОВЫЕ ПРИМЕРЫ";
+            button2.Text = "+  Добавить тест";
 
             button3.Visible = false;
-            button4.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            button4.Location = new Point(panel1.Width - 27, 3);
+            panel1.BorderStyle = BorderStyle.None;
+            panel1.BackColor = InkColor;
+            panel2.BorderStyle = BorderStyle.None;
+            panel2.BackColor = SurfaceColor;
+            panel3.BorderStyle = BorderStyle.None;
+            panel3.BackColor = Color.FromArgb(247, 249, 252);
+
+            _headerPanel = new Panel { BackColor = CanvasColor };
+            _headerAccent = new Panel { BackColor = AccentColor };
+            _headerEyebrow = new Label
+            {
+                Name = "headerEyebrow",
+                Text = "КОНСТРУКТОР ТЕСТИРОВАНИЯ",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+                ForeColor = AccentColor,
+            };
+            _headerTitle = new Label
+            {
+                Name = "headerTitle",
+                Text = "Пункт выдачи задач",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 20F, FontStyle.Bold),
+                ForeColor = InkColor,
+            };
+            _headerSubtitle = new Label
+            {
+                Name = "headerSubtitle",
+                Text = "Подготовьте условие, тесты и параметры нового задачника",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9.5F),
+                ForeColor = MutedColor,
+            };
+            _headerPanel.Controls.AddRange([_headerAccent, _headerEyebrow, _headerTitle, _headerSubtitle]);
+            Controls.Add(_headerPanel);
 
             _taskTabsScroll = new Panel
             {
-                Location = new Point(3, 3),
-                Size = new Size(panel1.Width - 34, 23),
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                Location = new Point(8, 4),
+                Size = new Size(panel1.Width - 50, 40),
                 AutoScroll = true,
             };
             _taskTabsFlow = new FlowLayoutPanel
@@ -75,7 +123,6 @@ namespace PVZ
                 Padding = new Padding(0),
             };
             _taskTabsScroll.Controls.Add(_taskTabsFlow);
-            _taskTabsScroll.Resize += (_, _) => LayoutTaskTabsScroll();
             panel1.Controls.Add(_taskTabsScroll);
 
             _testsFlow = new FlowLayoutPanel
@@ -93,15 +140,117 @@ namespace PVZ
             _testsFlow.ControlAdded += (_, _) => ScheduleLayoutTestPanels();
             _testsFlow.ControlRemoved += (_, _) => ScheduleLayoutTestPanels();
             panel3.Controls.Add(_testsFlow);
-            button2.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            button2.Location = new Point(3, panel3.Height - button2.Height - 3);
-            button2.Size = new Size(231, button2.Height);
+            StyleEditorControls(this);
+            LayoutEditor();
+            _headerPanel.BringToFront();
+        }
 
-            _basePanel1Width = panel1.Width;
-            _basePanel2Width = panel2.Width;
-            _basePanel3Width = panel3.Width;
-            _baseButton1Left = button1.Left;
-            _baseTextBox5Left = textBox5.Left;
+        private void LayoutEditor()
+        {
+            if (_taskTabsScroll == null || _testsFlow == null)
+                return;
+
+            const int margin = 16;
+            const int gap = 12;
+            const int footerHeight = 76;
+            const int testsWidth = 264;
+            var contentWidth = ClientSize.Width - margin * 2;
+            const int headerHeight = 66;
+            var tabsHeight = 42;
+            var headerTop = margin;
+            var tabsTop = headerTop + headerHeight + gap;
+            var contentTop = tabsTop + tabsHeight + gap;
+            var contentHeight = Math.Max(280, ClientSize.Height - contentTop - footerHeight - margin);
+
+            _headerPanel.SetBounds(margin, headerTop, contentWidth, headerHeight);
+            _headerAccent.SetBounds(0, 8, 3, 50);
+            _headerEyebrow.Location = new Point(14, 3);
+            _headerTitle.Location = new Point(12, 14);
+            _headerSubtitle.Location = new Point(14, 45);
+
+            panel1.SetBounds(margin, tabsTop, contentWidth, tabsHeight);
+            panel2.SetBounds(margin, contentTop, contentWidth, contentHeight);
+
+            button4.SetBounds(panel1.ClientSize.Width - 42, 7, 34, 28);
+            _taskTabsScroll.SetBounds(8, 5, Math.Max(100, panel1.ClientSize.Width - 58), 32);
+
+            const int contentPadding = 16;
+            var testsLeft = panel2.ClientSize.Width - testsWidth - contentPadding;
+            panel3.SetBounds(testsLeft, 42, testsWidth, panel2.ClientSize.Height - 58);
+            _testsFlow.SetBounds(10, 10, panel3.ClientSize.Width - 20, panel3.ClientSize.Height - 60);
+            button2.SetBounds(10, panel3.ClientSize.Height - 42, panel3.ClientSize.Width - 20, 34);
+
+            label1.SetBounds(contentPadding, 12, Math.Max(80, testsLeft - contentPadding - 16), 22);
+            textBox1.SetBounds(contentPadding, 40, Math.Max(180, testsLeft - contentPadding - 16), panel2.ClientSize.Height - 56);
+            label2.SetBounds(testsLeft, 12, testsWidth, 22);
+            label4.SetBounds(testsLeft, panel2.ClientSize.Height - 39, testsWidth - 32, 24);
+            textBox5.SetBounds(panel2.ClientSize.Width - contentPadding - 48, panel2.ClientSize.Height - 40, 48, 26);
+
+            var footerTop = panel2.Bottom + 10;
+            label3.SetBounds(margin, footerTop + 2, 156, 24);
+            textBox4.SetBounds(margin + 160, footerTop, 120, 28);
+            checkBox1.SetBounds(margin, footerTop + 34, 200, 24);
+            checkBox2.SetBounds(margin + 210, footerTop + 34, 150, 24);
+            checkBox3.SetBounds(margin + 380, footerTop + 2, 310, 24);
+            checkBox5.SetBounds(margin + 380, footerTop + 34, 260, 24);
+            button1.SetBounds(ClientSize.Width - margin - 210, footerTop + 8, 210, 42);
+
+            LayoutTaskTabsScroll();
+            LayoutTestPanels();
+        }
+
+        private static void StyleEditorControls(Control parent)
+        {
+            foreach (Control control in parent.Controls)
+            {
+                if (control.Name is not ("headerEyebrow" or "headerTitle" or "headerSubtitle"))
+                    control.Font = new Font("Segoe UI", 9.5F);
+                control.ForeColor = InkColor;
+
+                switch (control)
+                {
+                    case TextBox textBox:
+                        textBox.BorderStyle = BorderStyle.FixedSingle;
+                        textBox.BackColor = SurfaceColor;
+                        break;
+                    case Button button:
+                        button.FlatStyle = FlatStyle.Flat;
+                        button.FlatAppearance.BorderColor = BorderColor;
+                        button.BackColor = Color.FromArgb(237, 242, 248);
+                        button.Cursor = Cursors.Hand;
+                        button.Height = Math.Max(button.Height, 30);
+                        if (button.Name == "button1")
+                        {
+                            button.BackColor = AccentColor;
+                            button.ForeColor = Color.White;
+                            button.FlatAppearance.BorderColor = AccentColor;
+                            button.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+                        }
+                        break;
+                    case Label label:
+                        label.ForeColor = MutedColor;
+                        if (label.Name == "headerTitle")
+                        {
+                            label.ForeColor = InkColor;
+                        }
+                        else if (label.Name == "headerEyebrow")
+                        {
+                            label.ForeColor = AccentColor;
+                        }
+                        else if (label.Name == "label1" || label.Name == "label2")
+                        {
+                            label.ForeColor = InkColor;
+                            label.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+                        }
+                        break;
+                    case CheckBox:
+                        control.ForeColor = MutedColor;
+                        break;
+                }
+
+                if (control.HasChildren)
+                    StyleEditorControls(control);
+            }
         }
 
         private void WireEvents()
@@ -157,20 +306,29 @@ namespace PVZ
 
                 var tab = new Button
                 {
-                    Text = $"Задача {i + 1}",
-                    Size = new Size(75, TaskTabRowHeight),
+                    Text = $"ЗАДАЧА  {i + 1:00}",
+                    Size = new Size(94, TaskTabRowHeight),
                     Margin = new Padding(0),
-                    UseVisualStyleBackColor = true,
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = InkColor,
+                    ForeColor = Color.White,
+                    Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+                    Cursor = Cursors.Hand,
                 };
+                tab.FlatAppearance.BorderSize = 0;
                 tab.Click += (_, _) => SelectTask(index);
 
                 var removeTask = new Button
                 {
                     Text = "×",
-                    Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                    Size = new Size(23, TaskTabRowHeight),
+                    Font = new Font("Segoe UI", 11F, FontStyle.Bold),
+                    Size = new Size(27, TaskTabRowHeight),
                     Margin = new Padding(0),
-                    UseVisualStyleBackColor = true,
+                    FlatStyle = FlatStyle.Flat,
+                    FlatAppearance = { BorderSize = 0 },
+                    BackColor = Color.FromArgb(54, 65, 82),
+                    ForeColor = Color.White,
+                    Cursor = Cursors.Hand,
                 };
                 removeTask.Click += (_, _) => DeleteTask(index);
 
@@ -207,18 +365,6 @@ namespace PVZ
         private void LayoutTaskTabsScroll()
         {
             _taskTabsFlow.PerformLayout();
-            var needsHorizontalScroll = _taskTabsFlow.PreferredSize.Width > _taskTabsScroll.ClientSize.Width;
-            var scrollBarHeight = needsHorizontalScroll ? SystemInformation.HorizontalScrollBarHeight : 0;
-
-            _taskTabsScroll.Height = TaskTabRowHeight + scrollBarHeight;
-
-            const int panel1VerticalPadding = 8;
-            var newPanel1Height = TaskTabRowHeight + scrollBarHeight + panel1VerticalPadding;
-            if (panel1.Height != newPanel1Height)
-            {
-                panel1.Height = newPanel1Height;
-                panel2.Top = panel1.Bottom + 6;
-            }
         }
 
         private void UpdateTaskTabSelection()
@@ -227,7 +373,10 @@ namespace PVZ
             {
                 var selected = i == _currentTaskIndex;
                 _taskTabButtons[i].Font = new Font(_taskTabButtons[i].Font, selected ? FontStyle.Bold : FontStyle.Regular);
-                _taskTabButtons[i].BackColor = selected ? SystemColors.ControlLight : SystemColors.Control;
+                _taskTabButtons[i].FlatStyle = FlatStyle.Flat;
+                _taskTabButtons[i].FlatAppearance.BorderSize = 0;
+                _taskTabButtons[i].BackColor = selected ? Color.FromArgb(53, 105, 164) : InkColor;
+                _taskTabButtons[i].ForeColor = Color.White;
             }
 
             if (_currentTaskIndex >= 0 && _currentTaskIndex < _taskTabButtons.Count)
@@ -319,47 +468,12 @@ namespace PVZ
             _layingOutTests = true;
             try
             {
-                var needsScroll = TestsNeedVerticalScroll();
-                UpdateTestsScrollExpansion(needsScroll);
                 ApplyTestPanelWidths();
-
-                var needsScrollAfter = TestsNeedVerticalScroll();
-                if (needsScroll != needsScrollAfter)
-                {
-                    UpdateTestsScrollExpansion(needsScrollAfter);
-                    ApplyTestPanelWidths();
-                }
             }
             finally
             {
                 _layingOutTests = false;
             }
-        }
-
-        private void UpdateTestsScrollExpansion(bool needsVerticalScroll)
-        {
-            var targetReserve = needsVerticalScroll ? SystemInformation.VerticalScrollBarWidth : 0;
-            if (targetReserve == _testsScrollBarReserve)
-                return;
-
-            var delta = targetReserve - _testsScrollBarReserve;
-            _testsScrollBarReserve = targetReserve;
-
-            panel3.Width = _basePanel3Width + _testsScrollBarReserve;
-            panel2.Width = _basePanel2Width + _testsScrollBarReserve;
-            panel1.Width = _basePanel1Width + _testsScrollBarReserve;
-
-            textBox5.Left = _baseTextBox5Left + _testsScrollBarReserve;
-            button1.Left = _baseButton1Left + _testsScrollBarReserve;
-
-            ClientSize = new Size(ClientSize.Width + delta, ClientSize.Height);
-        }
-
-        private bool TestsNeedVerticalScroll()
-        {
-            var totalHeight = _testsFlow.Controls.Cast<Control>()
-                .Sum(c => c.Height + c.Margin.Top + c.Margin.Bottom);
-            return totalHeight > _testsFlow.ClientSize.Height;
         }
 
         private void ApplyTestPanelWidths()
@@ -374,26 +488,38 @@ namespace PVZ
                 panel.Width = width;
 
                 Button? removeButton = null;
+                TextBox? inputBox = null;
                 TextBox? outputBox = null;
                 TextBox? pointsBox = null;
                 Label? pointsLabel = null;
+                Label? outputHeading = null;
                 foreach (Control child in panel.Controls)
                 {
                     if (child is Button removeBtn && (string?)removeBtn.Tag == TestRemoveButtonTag)
                         removeButton = removeBtn;
-                    else if (child is TextBox outputCandidate && outputCandidate.Multiline && outputCandidate.PlaceholderText == "вывод")
+                    else if (child is TextBox inputCandidate && inputCandidate.Multiline && inputCandidate.PlaceholderText == "Данные для проверки")
+                        inputBox = inputCandidate;
+                    else if (child is TextBox outputCandidate && outputCandidate.Multiline && outputCandidate.PlaceholderText == "Результат")
                         outputBox = outputCandidate;
                     else if (child is TextBox pointsCandidate && pointsCandidate.PlaceholderText == "25" && !pointsCandidate.Multiline)
                         pointsBox = pointsCandidate;
                     else if (child is Label label && label.Text == "Баллы:")
                         pointsLabel = label;
+                    else if (child is Label headingCandidate && headingCandidate.Text == "РЕЗУЛЬТАТ")
+                        outputHeading = headingCandidate;
                 }
 
                 if (removeButton != null)
                     removeButton.Location = new Point(width - removeButton.Width - 3, 2);
 
-                if (outputBox != null)
-                    outputBox.Width = Math.Max(40, width - outputBox.Left - TestCloseButtonReserve - 2);
+                if (inputBox != null && outputBox != null)
+                {
+                    var fieldWidth = Math.Max(40, (width - 18) / 2);
+                    inputBox.SetBounds(4, 21, fieldWidth, 52);
+                    outputBox.SetBounds(inputBox.Right + 6, 21, Math.Max(40, width - inputBox.Right - 14), 52);
+                    if (outputHeading != null)
+                        outputHeading.Left = outputBox.Left;
+                }
                 if (pointsBox != null)
                 {
                     pointsBox.Left = Math.Max(128, width - TestCloseButtonReserve - pointsBox.Width - 4);
@@ -424,7 +550,8 @@ namespace PVZ
             var panel = new Panel
             {
                 BorderStyle = BorderStyle.FixedSingle,
-                Size = new Size(220, 98),
+                Size = new Size(220, 112),
+                BackColor = SurfaceColor,
                 Margin = new Padding(0, 0, 0, 6),
                 Tag = test,
             };
@@ -436,44 +563,71 @@ namespace PVZ
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 Size = new Size(22, 22),
                 TabStop = false,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(248, 250, 252),
+                ForeColor = MutedColor,
+                Cursor = Cursors.Hand,
             };
+            remove.FlatAppearance.BorderSize = 0;
             remove.Click += (_, _) => RemoveTestPanel(panel, test);
 
+            var inputLabel = new Label
+            {
+                Text = "ВВОД",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8F, FontStyle.Bold),
+                ForeColor = MutedColor,
+                Location = new Point(5, 3),
+            };
+            var outputLabel = new Label
+            {
+                Text = "РЕЗУЛЬТАТ",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8F, FontStyle.Bold),
+                ForeColor = MutedColor,
+                Location = new Point(110, 3),
+            };
             var input = new TextBox
             {
                 Multiline = true,
-                PlaceholderText = "ввод",
-                Location = new Point(0, 3),
-                Size = new Size(105, 64),
+                PlaceholderText = "Данные для проверки",
+                Location = new Point(4, 21),
+                Size = new Size(96, 52),
                 Text = test.Input,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Consolas", 9F),
             };
             var output = new TextBox
             {
                 Multiline = true,
-                PlaceholderText = "вывод",
-                Location = new Point(108, 3),
-                Size = new Size(80, 64),
+                PlaceholderText = "Результат",
+                Location = new Point(106, 21),
+                Size = new Size(82, 52),
                 Text = test.Output,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Consolas", 9F),
             };
             var show = new CheckBox
             {
                 Text = "Показывать",
                 AutoSize = true,
-                Location = new Point(3, 73),
+                Location = new Point(4, 81),
                 Checked = test.ShowToStudent,
             };
             var pointsLabel = new Label
             {
                 Text = "Баллы:",
                 AutoSize = true,
-                Location = new Point(128, 74),
+                Location = new Point(128, 82),
+                ForeColor = MutedColor,
             };
             var points = new TextBox
             {
                 PlaceholderText = "25",
-                Location = new Point(178, 71),
+                Location = new Point(178, 79),
                 Size = new Size(38, 23),
                 Text = test.Points > 0 ? test.Points.ToString() : "",
+                BorderStyle = BorderStyle.FixedSingle,
             };
 
             void Bind()
@@ -489,6 +643,8 @@ namespace PVZ
             show.CheckedChanged += (_, _) => Bind();
             points.TextChanged += (_, _) => Bind();
 
+            panel.Controls.Add(inputLabel);
+            panel.Controls.Add(outputLabel);
             panel.Controls.Add(input);
             panel.Controls.Add(output);
             panel.Controls.Add(show);
@@ -505,10 +661,10 @@ namespace PVZ
             {
                 switch (c)
                 {
-                    case TextBox tb when tb.Multiline && tb.PlaceholderText == "ввод":
+                    case TextBox tb when tb.Multiline && tb.PlaceholderText == "Данные для проверки":
                         test.Input = tb.Text;
                         break;
-                    case TextBox tb when tb.Multiline && tb.PlaceholderText == "вывод":
+                    case TextBox tb when tb.Multiline && tb.PlaceholderText == "Результат":
                         test.Output = tb.Text;
                         break;
                     case TextBox tb when tb.PlaceholderText == "25" && !tb.Multiline:
