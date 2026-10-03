@@ -5,6 +5,13 @@ namespace PVZ.Player;
 
 internal sealed class MainForm : Form
 {
+    private static readonly Color CanvasColor = Color.FromArgb(244, 246, 249);
+    private static readonly Color SurfaceColor = Color.White;
+    private static readonly Color InkColor = Color.FromArgb(30, 41, 59);
+    private static readonly Color MutedColor = Color.FromArgb(100, 116, 139);
+    private static readonly Color BorderColor = Color.FromArgb(218, 226, 235);
+    private static readonly Color AccentColor = Color.FromArgb(37, 99, 165);
+
     private readonly TaskbookDocument _document;
     private readonly TabControl _tabs;
     private readonly List<TaskWorkspaceControl> _taskViews = new();
@@ -44,6 +51,11 @@ internal sealed class MainForm : Form
         }
 
         _document = EmbeddedTaskbook.LoadForRunningApp();
+        MinimumSize = new Size(900, 600);
+        ClientSize = new Size(1180, 780);
+        BackColor = CanvasColor;
+        ForeColor = InkColor;
+        Font = new Font("Segoe UI", 10F);
         TopMost = _document.TopMost;
         if (_document.FullScreen)
         {
@@ -61,8 +73,86 @@ internal sealed class MainForm : Form
         BuildTeacherTab();
 
         Controls.Add(_tabs);
+        ApplyVisualStyle(this);
         _lastSelectedTab = _tabs.SelectedTab;
         ApplySequentialUnlock();
+    }
+
+    private static void ApplyVisualStyle(Control parent)
+    {
+        foreach (Control control in parent.Controls)
+        {
+            switch (control)
+            {
+                case TabControl:
+                    control.BackColor = CanvasColor;
+                    break;
+                case TabPage:
+                    control.BackColor = SurfaceColor;
+                    control.ForeColor = InkColor;
+                    break;
+                case TableLayoutPanel tableLayout when tableLayout.BackColor == SystemColors.Control:
+                    tableLayout.BackColor = CanvasColor;
+                    break;
+                case FlowLayoutPanel flowLayout when flowLayout.BackColor == SystemColors.Control:
+                    flowLayout.BackColor = CanvasColor;
+                    break;
+                case GroupBox groupBox when groupBox.BackColor == SystemColors.Control:
+                    groupBox.BackColor = SurfaceColor;
+                    groupBox.ForeColor = InkColor;
+                    break;
+                case Panel panel when panel.BackColor == SystemColors.Control:
+                    panel.BackColor = CanvasColor;
+                    break;
+                case TextBox textBox:
+                    textBox.BorderStyle = BorderStyle.FixedSingle;
+                    if (textBox.Name is "codeEditor" or "outputBox")
+                    {
+                        textBox.BackColor = Color.FromArgb(24, 34, 49);
+                        textBox.ForeColor = Color.FromArgb(226, 232, 240);
+                    }
+                    else
+                    {
+                        textBox.BackColor = SurfaceColor;
+                        textBox.ForeColor = InkColor;
+                    }
+                    break;
+                case Button button:
+                    button.FlatStyle = FlatStyle.Flat;
+                    button.FlatAppearance.BorderColor = BorderColor;
+                    button.BackColor = Color.FromArgb(237, 242, 248);
+                    button.ForeColor = InkColor;
+                    button.Cursor = Cursors.Hand;
+                    if (button.Text.Contains("Начать", StringComparison.OrdinalIgnoreCase) ||
+                        button.Text.Contains("Засчитать", StringComparison.OrdinalIgnoreCase) ||
+                        button.Text.Contains("провер", StringComparison.OrdinalIgnoreCase))
+                    {
+                        button.BackColor = AccentColor;
+                        button.ForeColor = Color.White;
+                        button.FlatAppearance.BorderColor = AccentColor;
+                        button.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+                    }
+                    break;
+                case Label label:
+                    if (!label.Text.StartsWith("Задач в задачнике:", StringComparison.Ordinal))
+                        label.ForeColor = InkColor;
+                    break;
+                case ListView listView:
+                    listView.BackColor = SurfaceColor;
+                    listView.ForeColor = InkColor;
+                    listView.BorderStyle = BorderStyle.FixedSingle;
+                    listView.GridLines = true;
+                    break;
+                case CheckedListBox checkedListBox:
+                    checkedListBox.BackColor = SurfaceColor;
+                    checkedListBox.ForeColor = InkColor;
+                    checkedListBox.BorderStyle = BorderStyle.FixedSingle;
+                    break;
+            }
+
+            if (control.HasChildren)
+                ApplyVisualStyle(control);
+        }
     }
 
     private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
@@ -184,40 +274,46 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 5,
+            Padding = new Padding(24),
+            BackColor = CanvasColor,
         };
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
         var title = new Label
         {
             Text = "Добро пожаловать в тестирование",
             AutoSize = true,
-            Font = new Font(Font.FontFamily, 14F, FontStyle.Bold),
-            Padding = new Padding(12),
+            Font = new Font("Segoe UI", 23F, FontStyle.Bold),
+            Padding = new Padding(4, 12, 4, 12),
         };
 
         var info = new Label
         {
             Text = $"Задач в задачнике: {_document.Tasks.Count}",
             AutoSize = true,
-            Padding = new Padding(12, 0, 12, 12),
+            Font = new Font("Segoe UI", 11F),
+            Padding = new Padding(4, 0, 4, 12),
+            ForeColor = MutedColor,
         };
 
         var buttons = new FlowLayoutPanel
         {
             AutoSize = true,
-            Padding = new Padding(12),
+            Padding = new Padding(4, 12, 4, 12),
             WrapContents = false,
+            Margin = new Padding(4),
         };
 
         var btnStart = new Button
         {
             Text = "Начать тест",
             AutoSize = true,
-            Font = new Font(Font.FontFamily, 11F, FontStyle.Bold),
+            Height = 42,
         };
         btnStart.Click += (_, _) =>
         {
@@ -236,6 +332,7 @@ internal sealed class MainForm : Form
         {
             Text = "Выключить компьютер",
             AutoSize = true,
+            Height = 42,
         };
         btnShutdown.Click += (_, _) =>
         {
@@ -256,8 +353,8 @@ internal sealed class MainForm : Form
         buttons.Controls.Add(btnStart);
         buttons.Controls.Add(btnShutdown);
 
-        layout.Controls.Add(title, 0, 0);
-        layout.Controls.Add(info, 0, 1);
+        layout.Controls.Add(title, 0, 1);
+        layout.Controls.Add(info, 0, 2);
         layout.Controls.Add(buttons, 0, 3);
 
         _startTab.Controls.Add(layout);
@@ -295,6 +392,9 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Fill,
             View = View.Details,
             FullRowSelect = true,
+            GridLines = true,
+            HeaderStyle = ColumnHeaderStyle.Nonclickable,
+            Padding = new Padding(8),
         };
         _resultsList.Columns.Add("Задача", 80);
         _resultsList.Columns.Add("Баллы", 100);

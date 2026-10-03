@@ -4,6 +4,13 @@ namespace PVZ.Player;
 
 internal sealed class TaskWorkspaceControl : UserControl
 {
+    private static readonly Color CanvasColor = Color.FromArgb(244, 246, 249);
+    private static readonly Color SurfaceColor = Color.White;
+    private static readonly Color InkColor = Color.FromArgb(30, 41, 59);
+    private static readonly Color MutedColor = Color.FromArgb(100, 116, 139);
+    private static readonly Color BorderColor = Color.FromArgb(218, 226, 235);
+    private static readonly Color AccentColor = Color.FromArgb(37, 99, 165);
+
     private readonly TaskbookTaskDto _task;
     private readonly int _taskIndex;
     private readonly Func<bool> _canRunTests;
@@ -22,30 +29,37 @@ internal sealed class TaskWorkspaceControl : UserControl
         _canRunTests = canRunTests;
         _onProgressChanged = onProgressChanged;
         Dock = DockStyle.Fill;
+        BackColor = CanvasColor;
+        Padding = new Padding(12);
 
         var top = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 36,
-            Padding = new Padding(4),
+            Height = 52,
+            Padding = new Padding(0, 4, 0, 8),
             WrapContents = false,
+            BackColor = CanvasColor,
         };
 
-        var btnShowCondition = new Button { Text = "Показать условие", AutoSize = true };
-        _btnTest = new Button { Text = "Тестировать", AutoSize = true };
+        var btnShowCondition = CreateButton("Показать условие");
+        _btnTest = CreateButton("Запустить проверку", primary: true);
         btnShowCondition.Click += (_, _) => ShowCondition();
         _btnTest.Click += async (_, _) => await RunTestsAsync();
 
         top.Controls.Add(btnShowCondition);
         top.Controls.Add(_btnTest);
 
-        var innerTabs = new TabControl { Dock = DockStyle.Fill };
+        var innerTabs = new TabControl { Dock = DockStyle.Fill, Padding = new Point(12, 5) };
 
-        var codeTab = new TabPage("1. Редактор");
+        var codeTab = new TabPage("Редактор кода");
         _codeEditor = new TextBox
         {
+            Name = "codeEditor",
             Dock = DockStyle.Fill,
-            Font = new Font("Consolas", 10F),
+            Font = new Font("Consolas", 11F),
+            BackColor = Color.FromArgb(24, 34, 49),
+            ForeColor = Color.FromArgb(226, 232, 240),
+            BorderStyle = BorderStyle.FixedSingle,
             AcceptsTab = true,
             Multiline = true,
             ScrollBars = ScrollBars.Both,
@@ -53,12 +67,14 @@ internal sealed class TaskWorkspaceControl : UserControl
         };
         codeTab.Controls.Add(_codeEditor);
 
-        var conditionTab = new TabPage("2. Условие / тесты");
+        var conditionTab = new TabPage("Условие и тесты");
         var conditionLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 2,
+            Padding = new Padding(8),
+            BackColor = CanvasColor,
         };
         conditionLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
         conditionLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
@@ -70,22 +86,30 @@ internal sealed class TaskWorkspaceControl : UserControl
             Multiline = true,
             ScrollBars = ScrollBars.Vertical,
             Text = _task.Description,
-            Font = new Font("Segoe UI", 10F),
+            Font = new Font("Segoe UI", 10.5F),
+            BackColor = SurfaceColor,
+            BorderStyle = BorderStyle.FixedSingle,
         };
 
         var visibleTestsPanel = BuildVisibleTestsPanel();
+        conditionBox.Margin = new Padding(0, 0, 0, 10);
+        visibleTestsPanel.Margin = new Padding(0);
         conditionLayout.Controls.Add(conditionBox, 0, 0);
         conditionLayout.Controls.Add(visibleTestsPanel, 0, 1);
         conditionTab.Controls.Add(conditionLayout);
 
-        var outputTab = new TabPage("3. Вывод Python");
+        var outputTab = new TabPage("Результат проверки");
         _outputBox = new TextBox
         {
+            Name = "outputBox",
             Dock = DockStyle.Fill,
             Multiline = true,
             ReadOnly = true,
             ScrollBars = ScrollBars.Both,
             Font = new Font("Consolas", 10F),
+            BackColor = Color.FromArgb(24, 34, 49),
+            ForeColor = Color.FromArgb(226, 232, 240),
+            BorderStyle = BorderStyle.FixedSingle,
             WordWrap = false,
         };
         outputTab.Controls.Add(_outputBox);
@@ -98,13 +122,30 @@ internal sealed class TaskWorkspaceControl : UserControl
         Controls.Add(top);
     }
 
+    private static Button CreateButton(string text, bool primary = false) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        Height = 36,
+        Padding = new Padding(12, 0, 12, 0),
+        FlatStyle = FlatStyle.Flat,
+        BackColor = primary ? AccentColor : SurfaceColor,
+        ForeColor = primary ? Color.White : InkColor,
+        Font = new Font("Segoe UI", 9.5F, primary ? FontStyle.Bold : FontStyle.Regular),
+        Cursor = Cursors.Hand,
+        FlatAppearance = { BorderColor = primary ? AccentColor : BorderColor },
+    };
+
     private Control BuildVisibleTestsPanel()
     {
         var group = new GroupBox
         {
             Text = "Тесты для ученика",
             Dock = DockStyle.Fill,
-            Padding = new Padding(8),
+            Padding = new Padding(12),
+            BackColor = SurfaceColor,
+            ForeColor = InkColor,
+            Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
         };
 
         var list = new FlowLayoutPanel
@@ -113,6 +154,8 @@ internal sealed class TaskWorkspaceControl : UserControl
             AutoScroll = true,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
+            Padding = new Padding(4),
+            BackColor = SurfaceColor,
         };
 
         var visibleTests = _task.Tests.Where(t => t.ShowToStudent).ToList();
@@ -122,6 +165,7 @@ internal sealed class TaskWorkspaceControl : UserControl
             {
                 Text = "Нет тестов, отмеченных «Показать ученику».",
                 AutoSize = true,
+                ForeColor = MutedColor,
             });
         }
         else
@@ -131,8 +175,9 @@ internal sealed class TaskWorkspaceControl : UserControl
                 var card = new Panel
                 {
                     Width = 420,
-                    Height = 110,
+                    Height = 126,
                     BorderStyle = BorderStyle.FixedSingle,
+                    BackColor = Color.FromArgb(248, 250, 252),
                     Margin = new Padding(0, 0, 0, 6),
                 };
 
@@ -141,30 +186,36 @@ internal sealed class TaskWorkspaceControl : UserControl
                     Text = "Ввод:",
                     AutoSize = true,
                     Location = new Point(6, 6),
+                    ForeColor = MutedColor,
                 });
                 card.Controls.Add(new TextBox
                 {
                     ReadOnly = true,
                     Multiline = true,
                     Location = new Point(6, 24),
-                    Size = new Size(190, 70),
+                    Size = new Size(190, 82),
                     Text = test.Input,
                     ScrollBars = ScrollBars.Vertical,
+                    BorderStyle = BorderStyle.FixedSingle,
+                    Font = new Font("Consolas", 9F),
                 });
                 card.Controls.Add(new Label
                 {
                     Text = "Вывод:",
                     AutoSize = true,
                     Location = new Point(210, 6),
+                    ForeColor = MutedColor,
                 });
                 card.Controls.Add(new TextBox
                 {
                     ReadOnly = true,
                     Multiline = true,
                     Location = new Point(210, 24),
-                    Size = new Size(190, 70),
+                    Size = new Size(190, 82),
                     Text = test.Output,
                     ScrollBars = ScrollBars.Vertical,
+                    BorderStyle = BorderStyle.FixedSingle,
+                    Font = new Font("Consolas", 9F),
                 });
 
                 list.Controls.Add(card);
