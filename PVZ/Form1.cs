@@ -33,9 +33,12 @@ namespace PVZ
         private const string TestRemoveButtonTag = "test-remove";
         private const int TestCloseButtonReserve = 26;
 
+        private Button _btnLoadTaskbook = null!;
+
         public Form1()
         {
             InitializeComponent();
+            PvzFormIcon.TryApply(this);
             var settings = BuilderThemePreferences.Load(out var settingsWarning);
             _themeMode = settings.Mode;
             _accentColor = Color.FromArgb(settings.AccentArgb);
@@ -189,8 +192,17 @@ namespace PVZ
                 ApplyBuilderTheme(mode, accent);
             };
 
+            _btnLoadTaskbook = new Button
+            {
+                Text = "Открыть .pvz",
+                AutoSize = true,
+                Height = 32,
+            };
+            _btnLoadTaskbook.Click += (_, _) => OnLoadTaskbook();
+
             Controls.Add(_btnAllowedCompilers);
             Controls.Add(_btnColorScheme);
+            Controls.Add(_btnLoadTaskbook);
             StyleEditorControls(this);
             LayoutEditor();
             _headerPanel.BringToFront();
@@ -246,6 +258,7 @@ namespace PVZ
             checkBox5.SetBounds(margin + 380, footerTop + 34, 260, 24);
             _btnAllowedCompilers.SetBounds(margin + 660, footerTop + 2, 190, 32);
             _btnColorScheme.SetBounds(margin + 660, footerTop + 38, 190, 32);
+            _btnLoadTaskbook.SetBounds(margin + 660, footerTop + 74, 190, 32);
             button1.SetBounds(ClientSize.Width - margin - 210, footerTop + 8, 210, 42);
 
             LayoutTaskTabsScroll();
@@ -843,6 +856,82 @@ namespace PVZ
             }
         }
 
+        private void OnLoadTaskbook()
+        {
+            var downloadsPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Downloads");
+            using var dialog = new OpenFileDialog
+            {
+                Filter = "Задачник PVZ (*.pvz)|*.pvz",
+                DefaultExt = "pvz",
+                CheckFileExists = true,
+                Title = "Открыть задачник для редактирования",
+                InitialDirectory = Directory.Exists(downloadsPath)
+                    ? downloadsPath
+                    : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            };
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            try
+            {
+                var document = TaskbookPackageIO.Load(dialog.FileName);
+                LoadFromDocument(document);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException or NotSupportedException)
+            {
+                MessageBox.Show(this, $"Не удалось открыть задачник:\n{ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void LoadFromDocument(TaskbookDocument document)
+        {
+            if (document.Tasks.Count == 0)
+            {
+                MessageBox.Show(this, "В файле нет задач.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            SaveCurrentTaskFromUi();
+            _tasks.Clear();
+            foreach (var task in document.Tasks)
+            {
+                var copy = new TaskbookTaskDto
+                {
+                    Description = task.Description,
+                    BonusPointsForAllTests = task.BonusPointsForAllTests,
+                    Tests = task.Tests.Select(test => new TestCaseDto
+                    {
+                        Input = test.Input,
+                        Output = test.Output,
+                        ShowToStudent = test.ShowToStudent,
+                        Points = test.Points,
+                    }).ToList(),
+                };
+                if (copy.Tests.Count == 0)
+                    copy.Tests.Add(new TestCaseDto());
+                _tasks.Add(copy);
+            }
+
+            checkBox1.Checked = document.TopMost;
+            checkBox2.Checked = document.FullScreen;
+            checkBox3.Checked = document.SequentialUnlock;
+            checkBox5.Checked = document.KillExplorer;
+            _allowedCompilers = document.AllowedCompilers;
+            textBox4.Clear();
+            textBox4.PlaceholderText = "Пароль из файла недоступен — задайте заново";
+            _currentTaskIndex = 0;
+            RebuildTaskTabs();
+            LoadTaskToUi(0);
+            MessageBox.Show(
+                this,
+                "Задачник загружен. Пароль преподавателя в .pvz не хранится в открытом виде — укажите его снова перед сохранением.",
+                Text,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
         private async void OnCreateTaskbook()
         {
             SaveCurrentTaskFromUi();
@@ -861,6 +950,21 @@ namespace PVZ
 
             if (!BuilderSettingsDialogs.TryPickDeliveryMode(this, out var online))
                 return;
+
+            var document = TaskbookPublisher.CreateDocument(
+                _tasks,
+                textBox4.Text,
+                checkBox3.Checked,
+                checkBox1.Checked,
+                checkBox2.Checked,
+                checkBox5.Checked,
+                _allowedCompilers);
+
+            if (online)
+            {
+                TeacherOnlineCabinetForm.ShowForUpload(this, document);
+                return;
+            }
 
             var downloadsPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -881,41 +985,27 @@ namespace PVZ
                 AddExtension = true,
                 FileName = "Задачник.pvz",
                 InitialDirectory = downloadsPath,
-                Title = online ? "Подготовить онлайн-задачник" : "Сохранить оффлайн-задачник",
+                Title = "Сохранить оффлайн-задачник",
             };
             if (dlg.ShowDialog() != DialogResult.OK)
                 return;
-
-            var document = TaskbookPublisher.CreateDocument(
-                _tasks,
-                textBox4.Text,
-                checkBox3.Checked,
-                checkBox1.Checked,
-                checkBox2.Checked,
-                checkBox5.Checked,
-                _allowedCompilers);
 
             UseWaitCursor = true;
             Enabled = false;
             try
             {
-                var result = await Task.Run(() => online
-                    ? TaskbookPublisher.PrepareOnlineUploadPackage(dlg.FileName, document)
-                    : TaskbookPublisher.PublishPackage(dlg.FileName, document));
+                var result = await Task.Run(() => TaskbookPublisher.PublishPackage(dlg.FileName, document));
                 if (!result.Success)
                 {
                     MessageBox.Show(result.ErrorMessage ?? "Не удалось подготовить задачник.", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
-                var message = online
-                    ? "Файл .pvz сжат и сохранён только на этом компьютере; контрольная сумма помогает обнаружить повреждение, но файл не зашифрован. Серверной админ-панели, загрузки и выдачи токена пока нет."
-                    : "Файл .pvz сжат и снабжён контрольной суммой, но не зашифрован. Передайте файл ученику для оффлайн-открытия; пароль преподавателя не нужен ученику и остаётся только у вас.";
                 MessageBox.Show(
-                    $"{message}\n\n{result.OutputPath}",
+                    $"Файл .pvz сжат и снабжён контрольной суммой, но не зашифрован. Передайте файл ученику для оффлайн-открытия; пароль преподавателя не нужен ученику и остаётся только у вас.\n\n{result.OutputPath}",
                     Text,
                     MessageBoxButtons.OK,
-                    online ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+                    MessageBoxIcon.Information);
             }
             finally
             {
@@ -927,6 +1017,11 @@ namespace PVZ
         private static int ParseIntOrDefault(string? text, int defaultValue)
         {
             return int.TryParse(text, out var value) ? value : defaultValue;
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+
         }
     }
 }

@@ -6,6 +6,8 @@ public sealed class TaskbookPublishResult
     public string? ErrorMessage { get; init; }
     public string? OutputExePath { get; init; }
     public string? OutputPath { get; init; }
+    public string? AccessToken { get; init; }
+    public DateTimeOffset? TokenExpiresAt { get; init; }
 }
 
 public static class TaskbookPublisher
@@ -113,8 +115,38 @@ public static class TaskbookPublisher
         }
     }
 
-    public static TaskbookPublishResult PrepareOnlineUploadPackage(string outputPath, TaskbookDocument document) =>
-        PublishPackage(outputPath, document);
+    public static async Task<TaskbookPublishResult> UploadOnlineAsync(
+        TaskbookDocument document,
+        string serverUrl,
+        string teacherApiKey,
+        CancellationToken cancellationToken = default)
+    {
+        var packagePath = Path.Combine(Path.GetTempPath(), $"pvz-upload-{Guid.NewGuid():N}.pvz");
+        try
+        {
+            TaskbookPackageIO.Save(packagePath, document);
+            var receipt = await TaskbookOnlineClient.UploadAsync(packagePath, serverUrl, teacherApiKey, cancellationToken);
+            return new TaskbookPublishResult
+            {
+                Success = true,
+                AccessToken = receipt.Token,
+                TokenExpiresAt = receipt.ExpiresAt,
+            };
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidDataException or InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            return new TaskbookPublishResult
+            {
+                Success = false,
+                ErrorMessage = $"Не удалось загрузить задачник на сервер: {ex.Message}",
+            };
+        }
+        finally
+        {
+            if (File.Exists(packagePath))
+                File.Delete(packagePath);
+        }
+    }
 
     public static string? FindPlayerTemplate()
     {

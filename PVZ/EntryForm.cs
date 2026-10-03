@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using PVZ.Core;
+using PVZ.Player;
 
 namespace PVZ;
 
@@ -11,6 +11,7 @@ internal sealed class EntryForm : Form
 
     public EntryForm()
     {
+        PvzFormIcon.TryApply(this);
         Text = "";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(420, 280);
@@ -47,26 +48,15 @@ internal sealed class EntryForm : Form
 
     private void StartStudentApp()
     {
-        var playerPath = TaskbookPublisher.FindPlayerTemplate();
-        if (playerPath is null)
-        {
-            MessageBox.Show(
-                this,
-                "Не найдено приложение ученика PVZ.Player.exe. Пересоберите решение, чтобы создать шаблон.",
-                Text,
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
-            return;
-        }
-
+        Hide();
         try
         {
-            Process.Start(new ProcessStartInfo(playerPath) { UseShellExecute = true });
-            Close();
+            using var student = new StudentStartForm();
+            student.ShowDialog();
         }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        finally
         {
-            MessageBox.Show(this, $"Не удалось запустить приложение ученика: {ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Close();
         }
     }
 

@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PVZ.Core\PVZ.Core.csproj" />
+    <ProjectReference Include="..\PVZ.Player\PVZ.Player.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
