@@ -8,8 +8,12 @@ using PVZ.Core;
 using PVZ.Server;
 
 var repositoryRoot = FindRepositoryRoot();
-var serverAssembly = Path.Combine(repositoryRoot, "PVZ.Server", "bin", "Debug", "net10.0", "PVZ.Server.dll");
-Require(File.Exists(serverAssembly), "Build PVZ.Server before running integration tests.");
+var serverAssembly = new[]
+{
+    Path.Combine(repositoryRoot, "PVZ.Server", "verify-output", "Debug", "net10.0", "PVZ.Server.dll"),
+    Path.Combine(repositoryRoot, "PVZ.Server", "bin", "Debug", "net10.0", "PVZ.Server.dll"),
+}.FirstOrDefault(File.Exists)
+    ?? throw new FileNotFoundException("Build PVZ.Server before running integration tests.");
 
 var portListener = new TcpListener(IPAddress.Loopback, 0);
 portListener.Start();
@@ -37,6 +41,14 @@ try
     };
     server = StartServer(serverAssembly, serverUrl, dataDirectory, adminKey);
     await WaitForServerAsync(client, server);
+    using var noRedirectClient = new HttpClient(
+        new HttpClientHandler { AllowAutoRedirect = false })
+    {
+        BaseAddress = new Uri(serverUrl),
+    };
+    using (var root = await noRedirectClient.GetAsync("/", HttpCompletionOption.ResponseHeadersRead))
+        Require(root.StatusCode == HttpStatusCode.Redirect && root.Headers.Location?.OriginalString == "/admin", "Root redirects to admin dashboard");
+
     using (var dashboard = await client.GetAsync("/admin"))
     {
         Require(dashboard.IsSuccessStatusCode, "Admin dashboard route");

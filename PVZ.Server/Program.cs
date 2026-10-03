@@ -44,6 +44,7 @@ app.Use(async (context, next) =>
 });
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/", () => Results.Redirect("/admin"));
 app.MapGet("/admin", () => Results.Content(AdminPage.Content, "text/html; charset=utf-8"));
 
 app.MapPost("/api/admin/taskbooks", async (HttpRequest request, TaskbookStore store, CancellationToken cancellationToken) =>
