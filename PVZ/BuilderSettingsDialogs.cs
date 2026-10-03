@@ -14,7 +14,7 @@ internal static class BuilderSettingsDialogs
             MinimizeBox = false,
             MaximizeBox = false,
             ShowInTaskbar = false,
-            ClientSize = new Size(410, 230),
+            ClientSize = new Size(410, 255),
         };
 
         var title = new Label
@@ -33,20 +33,20 @@ internal static class BuilderSettingsDialogs
         };
         var onlineChoice = new RadioButton
         {
-            Text = "Онлайн — подготовить .pvz для будущей загрузки на сервер",
+            Text = "Онлайн — загрузить .pvz на сервер и получить токен",
             AutoSize = true,
             Location = new Point(20, 90),
         };
         var note = new Label
         {
-            Text = "Сервер/API и серверная админ-панель не подключены: входа, загрузки и выдачи токена пока нет.\nПароль преподавателя относится только к локальной панели учителя в задачнике; не сообщайте его ученикам. Файл .pvz сжат и проверяется по контрольной сумме, но не зашифрован.",
+            Text = "Адрес общего сервера задаётся через PVZ_SERVER_URL (HTTPS). Для онлайн-загрузки используйте личный API-ключ учителя из 8 символов: задайте PVZ_TEACHER_API_KEY или вставьте ключ по запросу. Не сообщайте его ученикам; это не пароль преподавателя из задачника. Токен ученика состоит из 6 символов. .pvz сжат и проверяется по контрольной сумме, но не зашифрован.",
             AutoSize = false,
             Location = new Point(20, 120),
-            Size = new Size(370, 62),
+            Size = new Size(370, 82),
             ForeColor = Color.FromArgb(100, 116, 139),
         };
-        var ok = new Button { Text = "Продолжить", DialogResult = DialogResult.OK, Location = new Point(220, 197), Width = 90 };
-        var cancel = new Button { Text = "Отмена", DialogResult = DialogResult.Cancel, Location = new Point(316, 197), Width = 74 };
+        var ok = new Button { Text = "Продолжить", DialogResult = DialogResult.OK, Location = new Point(220, 215), Width = 90 };
+        var cancel = new Button { Text = "Отмена", DialogResult = DialogResult.Cancel, Location = new Point(316, 215), Width = 74 };
         dlg.Controls.AddRange([title, offline, onlineChoice, note, ok, cancel]);
         dlg.AcceptButton = ok;
         dlg.CancelButton = cancel;

@@ -367,6 +367,7 @@ internal sealed class TaskWorkspaceControl : UserControl
                     allPassed = false;
                 if (passed)
                     Progress.EarnedPoints += test.Points;
+                _onProgressChanged?.Invoke();
 
                 if (!test.ShowToStudent)
                     continue;
