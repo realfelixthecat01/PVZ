@@ -36,3 +36,11 @@ public sealed class TaskbookDocument
     public TaskbookCompilerFlags AllowedCompilers { get; set; } = TaskbookCompilerFlags.All;
     public List<TaskbookTaskDto> Tasks { get; set; } = new();
 }
+
+public sealed record OnlineStudentSession(string SessionId, DateTimeOffset StartedAt);
+
+public sealed record StudentTaskProgressDto(int EarnedPoints, bool Completed);
+
+public sealed record OnlineProgressUpdate(string SessionId, IReadOnlyList<StudentTaskProgressDto> Tasks);
+
+public sealed record OnlineStudentInfo(string FirstName, string LastName, string ClassName);

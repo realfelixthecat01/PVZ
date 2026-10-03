@@ -118,14 +118,14 @@ public static class TaskbookPublisher
     public static async Task<TaskbookPublishResult> UploadOnlineAsync(
         TaskbookDocument document,
         string serverUrl,
-        string adminKey,
+        string teacherApiKey,
         CancellationToken cancellationToken = default)
     {
         var packagePath = Path.Combine(Path.GetTempPath(), $"pvz-upload-{Guid.NewGuid():N}.pvz");
         try
         {
             TaskbookPackageIO.Save(packagePath, document);
-            var receipt = await TaskbookOnlineClient.UploadAsync(packagePath, serverUrl, adminKey, cancellationToken);
+            var receipt = await TaskbookOnlineClient.UploadAsync(packagePath, serverUrl, teacherApiKey, cancellationToken);
             return new TaskbookPublishResult
             {
                 Success = true,

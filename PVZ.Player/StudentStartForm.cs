@@ -61,7 +61,7 @@ internal sealed class StudentStartForm : Form
         ClearScreen();
         var title = CreateLabel("Онлайн-задачник", 22F, FontStyle.Bold);
         var subtitle = CreateLabel(
-            "Введите токен, выданный сервером после загрузки задачника учителем.\nНужен только токен: пароль преподавателя и ключ администратора ученикам не передаются.",
+            "Введите токен, выданный сервером после загрузки задачника учителем.\nНужны имя, фамилия и класс; личный API-ключ учителя и пароль преподавателя ученик не вводит.",
             10.5F,
             FontStyle.Regular,
             Muted);
@@ -78,44 +78,71 @@ internal sealed class StudentStartForm : Form
             BorderStyle = BorderStyle.FixedSingle,
             PlaceholderText = "Токен задачника",
         };
+        var firstName = CreateStudentField("Имя", 270);
+        var lastName = CreateStudentField("Фамилия", 316);
+        var className = CreateStudentField("Класс", 362);
         var open = CreateButton("Подключиться", primary: true);
-        open.Location = new Point((ClientSize.Width - open.Width) / 2, 284);
+        open.Location = new Point((ClientSize.Width - open.Width) / 2, 414);
         open.Click += async (_, _) =>
         {
-            if (string.IsNullOrWhiteSpace(token.Text))
+            if (token.Text.Trim().Length != 6)
             {
-                MessageBox.Show(this, "Введите токен учителя.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "Введите шестизначный токен задачника.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(firstName.Text) ||
+                string.IsNullOrWhiteSpace(lastName.Text) ||
+                string.IsNullOrWhiteSpace(className.Text))
+            {
+                MessageBox.Show(this, "Укажите имя, фамилию и класс.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            await OpenOnlineTaskbookAsync(token.Text.Trim());
+            await OpenOnlineTaskbookAsync(
+                token.Text.Trim().ToUpperInvariant(),
+                new OnlineStudentInfo(firstName.Text.Trim(), lastName.Text.Trim(), className.Text.Trim()));
         };
         var back = CreateButton("Назад", primary: false);
-        back.Location = new Point((ClientSize.Width - back.Width) / 2, 360);
+        back.Location = new Point((ClientSize.Width - back.Width) / 2, 482);
         back.Click += (_, _) => ShowSourceChoices();
         AddCentered(title, 105);
         AddCentered(subtitle, 158);
         Controls.Add(token);
+        Controls.Add(firstName);
+        Controls.Add(lastName);
+        Controls.Add(className);
         Controls.Add(open);
         Controls.Add(back);
     }
 
-    private async Task OpenOnlineTaskbookAsync(string token)
+    private TextBox CreateStudentField(string placeholder, int top) => new()
+    {
+        Width = 360,
+        Height = 36,
+        Location = new Point((ClientSize.Width - 360) / 2, top),
+        Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+        BackColor = Surface,
+        ForeColor = Ink,
+        BorderStyle = BorderStyle.FixedSingle,
+        PlaceholderText = placeholder,
+    };
+
+    private async Task OpenOnlineTaskbookAsync(string token, OnlineStudentInfo student)
     {
         UseWaitCursor = true;
         Enabled = false;
         try
         {
-            var document = await TaskbookOnlineClient.DownloadAsync(
-                token,
-                TaskbookOnlineClient.GetConfiguredServerUrl());
+            var serverUrl = TaskbookOnlineClient.GetConfiguredServerUrl();
+            var document = await TaskbookOnlineClient.DownloadAsync(token, serverUrl);
+            var session = await TaskbookOnlineClient.StartStudentSessionAsync(token, student, serverUrl);
             Hide();
-            using (var taskbook = new MainForm(document))
+            using (var taskbook = new MainForm(document, session, serverUrl))
                 taskbook.ShowDialog(this);
             if (!IsDisposed)
                 Show();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or NotSupportedException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException or HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or NotSupportedException)
         {
             MessageBox.Show(this, $"Не удалось получить задачник: {ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
@@ -153,7 +180,7 @@ internal sealed class StudentStartForm : Form
         {
             document = TaskbookPackageIO.Load(dialog.FileName);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or NotSupportedException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException or NotSupportedException)
         {
             MessageBox.Show(this, $"Не удалось открыть задачник:\n{ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;

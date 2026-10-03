@@ -14,6 +14,9 @@ internal sealed class MainForm : Form
     private static readonly Color AccentColor = Color.FromArgb(37, 99, 235);
 
     private readonly TaskbookDocument _document;
+    private readonly OnlineStudentSession? _onlineSession;
+    private readonly string? _serverUrl;
+    private readonly System.Windows.Forms.Timer _onlineHeartbeat = new() { Interval = 5000 };
     private readonly TabControl _tabs;
     private readonly List<TaskWorkspaceControl> _taskViews = new();
     private ListView _resultsList = null!;
@@ -32,8 +35,10 @@ internal sealed class MainForm : Form
     private bool _allowClose;
     private bool _explorerStopped;
     private bool _maxScoreCongratsShown;
+    private int _reportPending;
+    private Label _onlineStatusLabel = null!;
 
-    public MainForm(TaskbookDocument document)
+    public MainForm(TaskbookDocument document, OnlineStudentSession? onlineSession = null, string? serverUrl = null)
     {
         Text = "Пункт Выдачи Задач — тест";
         Width = 1000;
@@ -53,6 +58,10 @@ internal sealed class MainForm : Form
         }
 
         _document = document;
+        _onlineSession = onlineSession;
+        _serverUrl = serverUrl;
+        _onlineHeartbeat.Tick += async (_, _) => await ReportOnlineProgressAsync();
+        FormClosed += (_, _) => _onlineHeartbeat.Dispose();
         MinimumSize = new Size(900, 600);
         ClientSize = new Size(1180, 780);
         BackColor = CanvasColor;
@@ -78,6 +87,12 @@ internal sealed class MainForm : Form
         ApplyVisualStyle(this);
         _lastSelectedTab = _tabs.SelectedTab;
         ApplySequentialUnlock();
+        if (_onlineSession is not null && !string.IsNullOrWhiteSpace(_serverUrl))
+        {
+            _onlineStatusLabel.Text = "Онлайн-синхронизация подключается...";
+            _onlineHeartbeat.Start();
+            Shown += async (_, _) => await ReportOnlineProgressAsync();
+        }
     }
 
     private static void ApplyVisualStyle(Control parent)
@@ -384,7 +399,7 @@ internal sealed class MainForm : Form
                 _document.Tasks[i],
                 i,
                 () => _testStarted,
-                RefreshResults,
+                OnProgressChanged,
                 allowedCompilers);
             _taskViews.Add(view);
             page.Controls.Add(view);
@@ -427,9 +442,18 @@ internal sealed class MainForm : Form
             Height = 32,
         };
         _btnRefreshResults.Click += (_, _) => RefreshResults();
+        _onlineStatusLabel = new Label
+        {
+            Dock = DockStyle.Bottom,
+            Height = 26,
+            Padding = new Padding(10, 4, 4, 4),
+            Text = _onlineSession is null ? "" : "Ожидание онлайн-синхронизации...",
+            ForeColor = MutedColor,
+        };
 
         page.Controls.Add(_resultsList);
         page.Controls.Add(_totalScoreLabel);
+        page.Controls.Add(_onlineStatusLabel);
         page.Controls.Add(_btnRefreshResults);
         _tabs.TabPages.Add(page);
     }
@@ -481,7 +505,7 @@ internal sealed class MainForm : Form
                     _taskViews[i].Progress.Completed = true;
             }
 
-            RefreshResults();
+            OnProgressChanged();
             MessageBox.Show(this, "Зачёт обновлён.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
         };
 
@@ -570,6 +594,46 @@ internal sealed class MainForm : Form
                 "Поздравляем!",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
+        }
+    }
+
+    private void OnProgressChanged()
+    {
+        RefreshResults();
+        if (_onlineSession is not null)
+            _ = ReportOnlineProgressAsync();
+    }
+
+    private async Task ReportOnlineProgressAsync()
+    {
+        if (_onlineSession is null || string.IsNullOrWhiteSpace(_serverUrl) ||
+            IsDisposed || Interlocked.Exchange(ref _reportPending, 1) != 0)
+            return;
+
+        try
+        {
+            var progress = _taskViews.Select((view, index) =>
+            {
+                var maximum = TaskbookScoring.GetTaskMaxScore(_document.Tasks[index]);
+                var earned = view.Progress.TeacherCredited
+                    ? maximum
+                    : Math.Clamp(view.Progress.EarnedPoints, 0, maximum);
+                return new StudentTaskProgressDto(earned, view.Progress.Completed || view.Progress.TeacherCredited);
+            }).ToArray();
+            await TaskbookOnlineClient.ReportProgressAsync(
+                new OnlineProgressUpdate(_onlineSession.SessionId, progress),
+                _serverUrl);
+            if (!IsDisposed)
+                _onlineStatusLabel.Text = $"Прогресс сохранён: {DateTime.Now:HH:mm:ss}";
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException or TaskCanceledException)
+        {
+            if (!IsDisposed)
+                _onlineStatusLabel.Text = $"Нет связи с сервером: {exception.Message}";
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _reportPending, 0);
         }
     }
 }

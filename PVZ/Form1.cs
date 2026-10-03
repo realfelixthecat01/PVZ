@@ -873,24 +873,67 @@ namespace PVZ
 
             if (online)
             {
-                var serverUrl = TaskbookOnlineClient.GetConfiguredServerUrl();
-                var adminKey = Environment.GetEnvironmentVariable("PVZ_SERVER_ADMIN_KEY");
-                if (string.IsNullOrWhiteSpace(adminKey))
+                string serverUrl;
+                try
                 {
-                    MessageBox.Show(
-                        this,
-                        "Для загрузки задайте PVZ_SERVER_ADMIN_KEY на компьютере учителя. Это ключ API сервера, а не пароль преподавателя из задачника.",
-                        Text,
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
+                    serverUrl = TaskbookOnlineClient.GetConfiguredServerUrl();
+                }
+                catch (InvalidOperationException exception)
+                {
+                    MessageBox.Show(this, exception.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
+                }
+                var teacherApiKey = Environment.GetEnvironmentVariable("PVZ_TEACHER_API_KEY");
+                if (string.IsNullOrWhiteSpace(teacherApiKey))
+                {
+                    using var keyDialog = new Form
+                    {
+                        Text = "Личный ключ учителя",
+                        FormBorderStyle = FormBorderStyle.FixedDialog,
+                        StartPosition = FormStartPosition.CenterParent,
+                        MinimizeBox = false,
+                        MaximizeBox = false,
+                        ShowInTaskbar = false,
+                        ClientSize = new Size(460, 154),
+                    };
+                    var explanation = new Label
+                    {
+                        Text = "Введите личный API-ключ из кабинета учителя (8 символов).\nНе передавайте его ученикам; это не пароль преподавателя из задачника.",
+                        AutoSize = false,
+                        Location = new Point(12, 10),
+                        Size = new Size(436, 48),
+                    };
+                    var keyInput = new TextBox
+                    {
+                        Location = new Point(12, 64),
+                        Width = 436,
+                        MaxLength = 8,
+                        UseSystemPasswordChar = true,
+                    };
+                    var submit = new Button
+                    {
+                        Text = "Продолжить",
+                        DialogResult = DialogResult.OK,
+                        Location = new Point(268, 108),
+                        Size = new Size(180, 32),
+                    };
+                    keyDialog.Controls.AddRange([explanation, keyInput, submit]);
+                    keyDialog.AcceptButton = submit;
+                    if (keyDialog.ShowDialog(this) != DialogResult.OK || keyInput.Text.Trim().Length != 8)
+                    {
+                        if (keyDialog.DialogResult == DialogResult.OK)
+                            MessageBox.Show(this, "Ключ учителя должен состоять ровно из 8 символов.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    teacherApiKey = keyInput.Text.Trim();
                 }
 
                 UseWaitCursor = true;
                 Enabled = false;
                 try
                 {
-                    var result = await TaskbookPublisher.UploadOnlineAsync(document, serverUrl, adminKey);
+                    var result = await TaskbookPublisher.UploadOnlineAsync(document, serverUrl, teacherApiKey);
                     if (!result.Success)
                     {
                         MessageBox.Show(result.ErrorMessage ?? "Не удалось загрузить задачник.", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -898,7 +941,7 @@ namespace PVZ
                     }
 
                     MessageBox.Show(
-                        $"Задачник загружен на {serverUrl}.\nПередайте ученикам только токен доступа; ключ администратора и пароль преподавателя им не нужны.\n\nТокен (сохраните его, повторно сервер его не покажет):\n{result.AccessToken}\n\nДействует до: {result.TokenExpiresAt:yyyy-MM-dd HH:mm} UTC",
+                        $"Задачник загружен на {serverUrl}.\nПередайте ученикам только токен доступа; личный API-ключ учителя и пароль преподавателя им не нужны.\n\nТокен (сохраните его, повторно сервер его не покажет):\n{result.AccessToken}\n\nДействует до: {result.TokenExpiresAt:yyyy-MM-dd HH:mm} UTC",
                         Text,
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);

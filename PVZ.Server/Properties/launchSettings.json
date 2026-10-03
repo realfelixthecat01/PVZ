@@ -2,11 +2,11 @@
   "profiles": {
     "PVZ.Server": {
       "commandName": "Project",
-      "launchBrowser": true,
+      "launchBrowser": false,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "applicationUrl": "https://localhost:50251;http://localhost:50252"
+      "applicationUrl": "http://0.0.0.0:5080"
     }
   }
 }
