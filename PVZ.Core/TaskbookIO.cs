@@ -13,9 +13,17 @@ public static class TaskbookIO
     public static string Serialize(TaskbookDocument document) =>
         JsonSerializer.Serialize(document, Options);
 
-    public static TaskbookDocument Deserialize(string json) =>
-        JsonSerializer.Deserialize<TaskbookDocument>(json, Options)
-        ?? throw new InvalidDataException("Пустой или неверный задачник.");
+    public static TaskbookDocument Deserialize(string json)
+    {
+        var document = JsonSerializer.Deserialize<TaskbookDocument>(json, Options)
+            ?? throw new InvalidDataException("Пустой или неверный задачник.");
+
+        document.Tasks ??= new();
+        foreach (var task in document.Tasks)
+            task.Tests ??= new();
+
+        return document;
+    }
 
     public static TaskbookDocument LoadFromFile(string path)
     {

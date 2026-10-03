@@ -149,11 +149,22 @@ internal sealed class MainForm : Form
                     checkedListBox.ForeColor = InkColor;
                     checkedListBox.BorderStyle = BorderStyle.FixedSingle;
                     break;
+                case ComboBox comboBox:
+                    comboBox.BackColor = SurfaceColor;
+                    comboBox.ForeColor = InkColor;
+                    comboBox.FlatStyle = FlatStyle.Flat;
+                    break;
             }
 
             if (control.HasChildren)
                 ApplyVisualStyle(control);
         }
+    }
+
+    private static TaskbookCompilerFlags ResolveAllowedCompilers(TaskbookDocument document)
+    {
+        var allowed = document.AllowedCompilers;
+        return allowed == TaskbookCompilerFlags.None ? TaskbookCompilerFlags.All : allowed;
     }
 
     private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
@@ -364,10 +375,16 @@ internal sealed class MainForm : Form
 
     private void BuildTaskTabs()
     {
+        var allowedCompilers = ResolveAllowedCompilers(_document);
         for (var i = 0; i < _document.Tasks.Count; i++)
         {
             var page = new TabPage($"Задача {i + 1}");
-            var view = new TaskWorkspaceControl(_document.Tasks[i], i, () => _testStarted, RefreshResults);
+            var view = new TaskWorkspaceControl(
+                _document.Tasks[i],
+                i,
+                () => _testStarted,
+                RefreshResults,
+                allowedCompilers);
             _taskViews.Add(view);
             page.Controls.Add(view);
             _tabs.TabPages.Add(page);
@@ -435,12 +452,11 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 3,
             Padding = new Padding(8),
         };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         layout.Controls.Add(new Label { Text = "Пароль подтверждён. Отметьте задачи для зачёта:", AutoSize = true }, 0, 0);
@@ -481,7 +497,7 @@ internal sealed class MainForm : Form
         teacherButtons.Controls.Add(btnApply);
         teacherButtons.Controls.Add(btnCloseApp);
 
-        layout.Controls.Add(teacherButtons, 0, 3);
+        layout.Controls.Add(teacherButtons, 0, 2);
 
         _teacherUnlockedPanel.Controls.Add(layout);
         _teacherPassword = new TextBox();

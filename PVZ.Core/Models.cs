@@ -1,5 +1,14 @@
 namespace PVZ.Core;
 
+[Flags]
+public enum TaskbookCompilerFlags
+{
+    None = 0,
+    Python = 1,
+    PascalAbc = 2,
+    All = Python | PascalAbc,
+}
+
 public sealed class TestCaseDto
 {
     public string Input { get; set; } = "";
@@ -24,5 +33,6 @@ public sealed class TaskbookDocument
     public bool TopMost { get; set; }
     public bool FullScreen { get; set; }
     public bool KillExplorer { get; set; }
+    public TaskbookCompilerFlags AllowedCompilers { get; set; } = TaskbookCompilerFlags.All;
     public List<TaskbookTaskDto> Tasks { get; set; } = new();
 }

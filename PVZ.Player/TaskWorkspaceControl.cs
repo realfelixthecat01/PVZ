@@ -15,19 +15,28 @@ internal sealed class TaskWorkspaceControl : UserControl
     private readonly int _taskIndex;
     private readonly Func<bool> _canRunTests;
     private readonly Action? _onProgressChanged;
+    private readonly TaskbookCompilerFlags _allowedCompilers;
 
     private readonly TextBox _codeEditor;
     private readonly TextBox _outputBox;
     private readonly Button _btnTest;
+    private readonly ComboBox _compilerCombo;
+    private readonly TabControl _innerTabs;
 
     public TaskProgress Progress { get; } = new();
 
-    public TaskWorkspaceControl(TaskbookTaskDto task, int taskIndex, Func<bool> canRunTests, Action? onProgressChanged = null)
+    public TaskWorkspaceControl(
+        TaskbookTaskDto task,
+        int taskIndex,
+        Func<bool> canRunTests,
+        Action? onProgressChanged,
+        TaskbookCompilerFlags allowedCompilers)
     {
         _task = task;
         _taskIndex = taskIndex;
         _canRunTests = canRunTests;
         _onProgressChanged = onProgressChanged;
+        _allowedCompilers = allowedCompilers;
         Dock = DockStyle.Fill;
         BackColor = CanvasColor;
         Padding = new Padding(12);
@@ -41,15 +50,24 @@ internal sealed class TaskWorkspaceControl : UserControl
             BackColor = CanvasColor,
         };
 
+        _compilerCombo = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Width = 170,
+            Height = 36,
+            Margin = new Padding(0, 0, 8, 0),
+        };
+
         var btnShowCondition = CreateButton("Показать условие");
         _btnTest = CreateButton("Запустить проверку", primary: true);
         btnShowCondition.Click += (_, _) => ShowCondition();
         _btnTest.Click += async (_, _) => await RunTestsAsync();
 
+        top.Controls.Add(_compilerCombo);
         top.Controls.Add(btnShowCondition);
         top.Controls.Add(_btnTest);
 
-        var innerTabs = new TabControl { Dock = DockStyle.Fill, Padding = new Point(12, 5) };
+        _innerTabs = new TabControl { Dock = DockStyle.Fill, Padding = new Point(12, 5) };
 
         var codeTab = new TabPage("Редактор кода");
         _codeEditor = new TextBox
@@ -114,12 +132,81 @@ internal sealed class TaskWorkspaceControl : UserControl
         };
         outputTab.Controls.Add(_outputBox);
 
-        innerTabs.TabPages.Add(codeTab);
-        innerTabs.TabPages.Add(conditionTab);
-        innerTabs.TabPages.Add(outputTab);
+        _innerTabs.TabPages.Add(codeTab);
+        _innerTabs.TabPages.Add(conditionTab);
+        _innerTabs.TabPages.Add(outputTab);
 
-        Controls.Add(innerTabs);
+        Controls.Add(_innerTabs);
         Controls.Add(top);
+
+        ConfigureCompilerCombo();
+    }
+
+    private void ShowOutputTab(string message)
+    {
+        if (_innerTabs.TabPages.Count >= 3)
+            _innerTabs.SelectedTab = _innerTabs.TabPages[2];
+        _outputBox.Text = message;
+    }
+
+    private void ConfigureCompilerCombo()
+    {
+        _compilerCombo.SelectedIndexChanged -= OnCompilerComboSelectedIndexChanged;
+
+        var selected = GetSelectedCompiler();
+        _compilerCombo.Items.Clear();
+
+        if (_allowedCompilers.HasFlag(TaskbookCompilerFlags.Python))
+            _compilerCombo.Items.Add(new CompilerItem("Python", TaskbookCompilerFlags.Python));
+        if (_allowedCompilers.HasFlag(TaskbookCompilerFlags.PascalAbc))
+            _compilerCombo.Items.Add(new CompilerItem("PascalABC.NET", TaskbookCompilerFlags.PascalAbc));
+
+        if (_compilerCombo.Items.Count == 0)
+        {
+            _compilerCombo.Items.Add(new CompilerItem("Python", TaskbookCompilerFlags.Python));
+            _compilerCombo.SelectedIndex = 0;
+            _compilerCombo.Enabled = false;
+        }
+        else
+        {
+            _compilerCombo.Enabled = _compilerCombo.Items.Count > 1;
+            var index = 0;
+            for (var i = 0; i < _compilerCombo.Items.Count; i++)
+            {
+                if (((CompilerItem)_compilerCombo.Items[i]!).Flag == selected)
+                {
+                    index = i;
+                    break;
+                }
+            }
+
+            _compilerCombo.SelectedIndex = index;
+        }
+
+        _compilerCombo.SelectedIndexChanged += OnCompilerComboSelectedIndexChanged;
+        UpdateCodeTabTitle();
+    }
+
+    private void OnCompilerComboSelectedIndexChanged(object? sender, EventArgs e) => UpdateCodeTabTitle();
+
+    private TaskbookCompilerFlags GetSelectedCompiler()
+    {
+        if (_compilerCombo.SelectedItem is CompilerItem item)
+            return item.Flag;
+
+        return TaskbookCompilerFlags.Python;
+    }
+
+    private void UpdateCodeTabTitle()
+    {
+        if (_innerTabs.TabPages.Count == 0)
+            return;
+
+        _innerTabs.TabPages[0].Text = GetSelectedCompiler() switch
+        {
+            TaskbookCompilerFlags.PascalAbc => "Редактор PascalABC.NET",
+            _ => "Редактор Python",
+        };
     }
 
     private static Button CreateButton(string text, bool primary = false) => new()
@@ -246,62 +333,83 @@ internal sealed class TaskWorkspaceControl : UserControl
         }
 
         _btnTest.Enabled = false;
-        _outputBox.Clear();
-        Progress.Reset();
-
-        var code = _codeEditor.Text;
-        if (string.IsNullOrWhiteSpace(code))
+        try
         {
-            _outputBox.Text = "Введите код Python.";
+            ShowOutputTab("Проверка…");
+            Progress.Reset();
+
+            var code = _codeEditor.Text;
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                ShowOutputTab(GetSelectedCompiler() == TaskbookCompilerFlags.PascalAbc
+                    ? "Введите код PascalABC.NET."
+                    : "Введите код Python.");
+                return;
+            }
+
+            var compiler = GetSelectedCompiler();
+            var lines = new List<string>();
+            var visibleTests = _task.Tests.Where(t => t.ShowToStudent).ToList();
+            var allPassed = true;
+            Progress.EarnedPoints = 0;
+
+            foreach (var test in _task.Tests)
+            {
+                var result = compiler == TaskbookCompilerFlags.PascalAbc
+                    ? await PascalAbcRunner.RunAsync(code, test.Input)
+                    : await PythonRunner.RunAsync(code, test.Input);
+                var actual = PythonRunner.NormalizeOutput(result.StandardOutput);
+                var expected = PythonRunner.NormalizeOutput(test.Output);
+                var passed = actual == expected && result.Success;
+
+                if (!passed)
+                    allPassed = false;
+                if (passed)
+                    Progress.EarnedPoints += test.Points;
+
+                if (!test.ShowToStudent)
+                    continue;
+
+                lines.Add($"--- Тест (ввод: {test.Input.Replace("\n", "\\n")}) ---");
+                if (!string.IsNullOrEmpty(result.ErrorMessage))
+                    lines.Add(result.ErrorMessage);
+                if (!string.IsNullOrEmpty(result.StandardError))
+                    lines.Add(result.StandardError);
+                lines.Add($"Вывод:\n{result.StandardOutput}");
+                lines.Add(passed ? $"OK (+{test.Points} баллов)" : $"Ошибка. Ожидалось:\n{test.Output}");
+                lines.Add("");
+            }
+
+            if (visibleTests.Count == 0)
+                lines.Add("Скрытые тесты проверены. Детали не показываются.");
+
+            Progress.Completed = allPassed;
+            if (Progress.Completed)
+                Progress.EarnedPoints += _task.BonusPointsForAllTests;
+
+            Progress.EarnedPoints = Math.Min(Progress.EarnedPoints, TaskbookScoring.GetTaskMaxScore(_task));
+
+            ShowOutputTab(string.Join(Environment.NewLine, lines));
+            _onProgressChanged?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            ShowOutputTab($"Ошибка проверки:\n{ex.Message}");
+        }
+        finally
+        {
             _btnTest.Enabled = true;
-            return;
         }
-
-        var lines = new List<string>();
-        var visibleTests = _task.Tests.Where(t => t.ShowToStudent).ToList();
-        var allPassed = true;
-        Progress.EarnedPoints = 0;
-
-        foreach (var test in _task.Tests)
-        {
-            var result = await PythonRunner.RunAsync(code, test.Input);
-            var actual = PythonRunner.NormalizeOutput(result.StandardOutput);
-            var expected = PythonRunner.NormalizeOutput(test.Output);
-            var passed = actual == expected && result.Success;
-
-            if (!passed)
-                allPassed = false;
-            if (passed)
-                Progress.EarnedPoints += test.Points;
-
-            if (!test.ShowToStudent)
-                continue;
-
-            lines.Add($"--- Тест (ввод: {test.Input.Replace("\n", "\\n")}) ---");
-            if (!string.IsNullOrEmpty(result.ErrorMessage))
-                lines.Add(result.ErrorMessage);
-            if (!string.IsNullOrEmpty(result.StandardError))
-                lines.Add(result.StandardError);
-            lines.Add($"Вывод:\n{result.StandardOutput}");
-            lines.Add(passed ? $"OK (+{test.Points} баллов)" : $"Ошибка. Ожидалось:\n{test.Output}");
-            lines.Add("");
-        }
-
-        if (visibleTests.Count == 0)
-            lines.Add("Скрытые тесты проверены. Детали не показываются.");
-
-        Progress.Completed = allPassed;
-        if (Progress.Completed)
-            Progress.EarnedPoints += _task.BonusPointsForAllTests;
-
-        Progress.EarnedPoints = Math.Min(Progress.EarnedPoints, TaskbookScoring.GetTaskMaxScore(_task));
-
-        _outputBox.Text = string.Join(Environment.NewLine, lines);
-        _btnTest.Enabled = true;
-        _onProgressChanged?.Invoke();
     }
 
     public void SetTeacherCredited(bool credited) => Progress.TeacherCredited = credited;
+
+    private sealed class CompilerItem(string text, TaskbookCompilerFlags flag)
+    {
+        public TaskbookCompilerFlags Flag { get; } = flag;
+
+        public override string ToString() => text;
+    }
 }
 
 internal sealed class TaskProgress

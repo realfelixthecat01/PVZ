@@ -17,9 +17,13 @@ public static class TaskbookPublisher
         bool sequentialUnlock,
         bool topMost,
         bool fullScreen,
-        bool killExplorer)
+        bool killExplorer,
+        TaskbookCompilerFlags allowedCompilers = TaskbookCompilerFlags.All)
     {
         var (hash, salt) = PasswordUtil.CreateHash(teacherPassword);
+        if (allowedCompilers == TaskbookCompilerFlags.None)
+            allowedCompilers = TaskbookCompilerFlags.All;
+
         return new TaskbookDocument
         {
             TeacherPasswordHash = hash,
@@ -28,6 +32,7 @@ public static class TaskbookPublisher
             TopMost = topMost,
             FullScreen = fullScreen,
             KillExplorer = killExplorer,
+            AllowedCompilers = allowedCompilers,
             Tasks = tasks.ToList(),
         };
     }

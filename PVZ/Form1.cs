@@ -18,24 +18,27 @@ namespace PVZ
         private Label _headerSubtitle = null!;
         private FlowLayoutPanel _taskTabsFlow = null!;
         private bool _layingOutTests;
+        private TaskbookCompilerFlags _allowedCompilers = TaskbookCompilerFlags.All;
+        private bool _isDarkTheme;
+        private Button _btnAllowedCompilers = null!;
+        private Button _btnColorScheme = null!;
+        private Color _canvasColor = Color.FromArgb(244, 246, 249);
+        private Color _surfaceColor = Color.White;
+        private Color _inkColor = Color.FromArgb(30, 41, 59);
+        private Color _mutedColor = Color.FromArgb(100, 116, 139);
+        private Color _borderColor = Color.FromArgb(218, 226, 235);
+        private Color _accentColor = Color.FromArgb(37, 99, 165);
         private const int TaskTabRowHeight = 30;
         private const string TestRemoveButtonTag = "test-remove";
         private const int TestCloseButtonReserve = 26;
-
-        private static readonly Color CanvasColor = Color.FromArgb(244, 246, 249);
-        private static readonly Color SurfaceColor = Color.White;
-        private static readonly Color InkColor = Color.FromArgb(30, 41, 59);
-        private static readonly Color MutedColor = Color.FromArgb(100, 116, 139);
-        private static readonly Color BorderColor = Color.FromArgb(218, 226, 235);
-        private static readonly Color AccentColor = Color.FromArgb(37, 99, 165);
 
         public Form1()
         {
             InitializeComponent();
             MinimumSize = new Size(1000, 680);
             ClientSize = new Size(1120, 720);
-            BackColor = CanvasColor;
-            ForeColor = InkColor;
+            BackColor = _canvasColor;
+            ForeColor = _inkColor;
             Font = new Font("Segoe UI", 9.5F);
             SetupUi();
             Resize += (_, _) => LayoutEditor();
@@ -72,21 +75,21 @@ namespace PVZ
 
             button3.Visible = false;
             panel1.BorderStyle = BorderStyle.None;
-            panel1.BackColor = InkColor;
+            panel1.BackColor = _inkColor;
             panel2.BorderStyle = BorderStyle.None;
-            panel2.BackColor = SurfaceColor;
+            panel2.BackColor = _surfaceColor;
             panel3.BorderStyle = BorderStyle.None;
             panel3.BackColor = Color.FromArgb(247, 249, 252);
 
-            _headerPanel = new Panel { BackColor = CanvasColor };
-            _headerAccent = new Panel { BackColor = AccentColor };
+            _headerPanel = new Panel { BackColor = _canvasColor };
+            _headerAccent = new Panel { BackColor = _accentColor };
             _headerEyebrow = new Label
             {
                 Name = "headerEyebrow",
                 Text = "КОНСТРУКТОР ТЕСТИРОВАНИЯ",
                 AutoSize = true,
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
-                ForeColor = AccentColor,
+                ForeColor = _accentColor,
             };
             _headerTitle = new Label
             {
@@ -94,7 +97,7 @@ namespace PVZ
                 Text = "Пункт выдачи задач",
                 AutoSize = true,
                 Font = new Font("Segoe UI", 20F, FontStyle.Bold),
-                ForeColor = InkColor,
+                ForeColor = _inkColor,
             };
             _headerSubtitle = new Label
             {
@@ -102,7 +105,7 @@ namespace PVZ
                 Text = "Подготовьте условие, тесты и параметры нового задачника",
                 AutoSize = true,
                 Font = new Font("Segoe UI", 9.5F),
-                ForeColor = MutedColor,
+                ForeColor = _mutedColor,
             };
             _headerPanel.Controls.AddRange([_headerAccent, _headerEyebrow, _headerTitle, _headerSubtitle]);
             Controls.Add(_headerPanel);
@@ -140,6 +143,39 @@ namespace PVZ
             _testsFlow.ControlAdded += (_, _) => ScheduleLayoutTestPanels();
             _testsFlow.ControlRemoved += (_, _) => ScheduleLayoutTestPanels();
             panel3.Controls.Add(_testsFlow);
+
+            _btnAllowedCompilers = new Button
+            {
+                Text = "Разрешённые компиляторы",
+                AutoSize = true,
+                Height = 32,
+            };
+            _btnAllowedCompilers.Click += (_, _) =>
+            {
+                var allowed = _allowedCompilers;
+                if (!BuilderSettingsDialogs.TryPickAllowedCompilers(this, ref allowed))
+                    return;
+
+                _allowedCompilers = allowed;
+            };
+
+            _btnColorScheme = new Button
+            {
+                Text = "Цветовая схема",
+                AutoSize = true,
+                Height = 32,
+            };
+            _btnColorScheme.Click += (_, _) =>
+            {
+                var isDark = _isDarkTheme;
+                if (!BuilderSettingsDialogs.TryPickColorScheme(this, ref isDark))
+                    return;
+
+                ApplyBuilderTheme(isDark);
+            };
+
+            Controls.Add(_btnAllowedCompilers);
+            Controls.Add(_btnColorScheme);
             StyleEditorControls(this);
             LayoutEditor();
             _headerPanel.BringToFront();
@@ -152,7 +188,7 @@ namespace PVZ
 
             const int margin = 16;
             const int gap = 12;
-            const int footerHeight = 76;
+            const int footerHeight = 108;
             const int testsWidth = 264;
             var contentWidth = ClientSize.Width - margin * 2;
             const int headerHeight = 66;
@@ -193,63 +229,104 @@ namespace PVZ
             checkBox2.SetBounds(margin + 210, footerTop + 34, 150, 24);
             checkBox3.SetBounds(margin + 380, footerTop + 2, 310, 24);
             checkBox5.SetBounds(margin + 380, footerTop + 34, 260, 24);
+            _btnAllowedCompilers.SetBounds(margin + 660, footerTop + 2, 190, 32);
+            _btnColorScheme.SetBounds(margin + 660, footerTop + 38, 190, 32);
             button1.SetBounds(ClientSize.Width - margin - 210, footerTop + 8, 210, 42);
 
             LayoutTaskTabsScroll();
             LayoutTestPanels();
         }
 
-        private static void StyleEditorControls(Control parent)
+        private void StyleEditorControls(Control parent)
         {
             foreach (Control control in parent.Controls)
             {
                 if (control.Name is not ("headerEyebrow" or "headerTitle" or "headerSubtitle"))
                     control.Font = new Font("Segoe UI", 9.5F);
-                control.ForeColor = InkColor;
+                control.ForeColor = _inkColor;
 
                 switch (control)
                 {
                     case TextBox textBox:
                         textBox.BorderStyle = BorderStyle.FixedSingle;
-                        textBox.BackColor = SurfaceColor;
+                        textBox.BackColor = _surfaceColor;
                         break;
                     case Button button:
                         button.FlatStyle = FlatStyle.Flat;
-                        button.FlatAppearance.BorderColor = BorderColor;
-                        button.BackColor = Color.FromArgb(237, 242, 248);
+                        button.FlatAppearance.BorderColor = _borderColor;
+                        button.BackColor = _isDarkTheme ? Color.FromArgb(51, 65, 85) : Color.FromArgb(237, 242, 248);
                         button.Cursor = Cursors.Hand;
                         button.Height = Math.Max(button.Height, 30);
                         if (button.Name == "button1")
                         {
-                            button.BackColor = AccentColor;
+                            button.BackColor = _accentColor;
                             button.ForeColor = Color.White;
-                            button.FlatAppearance.BorderColor = AccentColor;
+                            button.FlatAppearance.BorderColor = _accentColor;
                             button.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
                         }
                         break;
                     case Label label:
-                        label.ForeColor = MutedColor;
+                        label.ForeColor = _mutedColor;
                         if (label.Name == "headerTitle")
                         {
-                            label.ForeColor = InkColor;
+                            label.ForeColor = _inkColor;
                         }
                         else if (label.Name == "headerEyebrow")
                         {
-                            label.ForeColor = AccentColor;
+                            label.ForeColor = _accentColor;
                         }
                         else if (label.Name == "label1" || label.Name == "label2")
                         {
-                            label.ForeColor = InkColor;
+                            label.ForeColor = _inkColor;
                             label.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
                         }
                         break;
                     case CheckBox:
-                        control.ForeColor = MutedColor;
+                        control.ForeColor = _mutedColor;
                         break;
                 }
 
                 if (control.HasChildren)
                     StyleEditorControls(control);
+            }
+        }
+
+        private void ApplyBuilderTheme(bool isDark)
+        {
+            _isDarkTheme = isDark;
+            if (isDark)
+            {
+                _canvasColor = Color.FromArgb(30, 41, 59);
+                _surfaceColor = Color.FromArgb(38, 50, 68);
+                _inkColor = Color.FromArgb(226, 232, 240);
+                _mutedColor = Color.FromArgb(148, 163, 184);
+                _borderColor = Color.FromArgb(71, 85, 105);
+            }
+            else
+            {
+                _canvasColor = Color.FromArgb(244, 246, 249);
+                _surfaceColor = Color.White;
+                _inkColor = Color.FromArgb(30, 41, 59);
+                _mutedColor = Color.FromArgb(100, 116, 139);
+                _borderColor = Color.FromArgb(218, 226, 235);
+            }
+
+            BackColor = _canvasColor;
+            ForeColor = _inkColor;
+            _headerPanel.BackColor = _canvasColor;
+            _headerTitle.ForeColor = _inkColor;
+            _headerSubtitle.ForeColor = _mutedColor;
+            panel1.BackColor = _inkColor;
+            panel2.BackColor = _surfaceColor;
+            panel3.BackColor = isDark ? Color.FromArgb(45, 55, 72) : Color.FromArgb(247, 249, 252);
+
+            StyleEditorControls(this);
+            UpdateTaskTabSelection();
+
+            foreach (Control control in _testsFlow.Controls)
+            {
+                if (control is Panel panel)
+                    panel.BackColor = _surfaceColor;
             }
         }
 
@@ -310,7 +387,7 @@ namespace PVZ
                     Size = new Size(94, TaskTabRowHeight),
                     Margin = new Padding(0),
                     FlatStyle = FlatStyle.Flat,
-                    BackColor = InkColor,
+                    BackColor = _inkColor,
                     ForeColor = Color.White,
                     Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
                     Cursor = Cursors.Hand,
@@ -375,7 +452,7 @@ namespace PVZ
                 _taskTabButtons[i].Font = new Font(_taskTabButtons[i].Font, selected ? FontStyle.Bold : FontStyle.Regular);
                 _taskTabButtons[i].FlatStyle = FlatStyle.Flat;
                 _taskTabButtons[i].FlatAppearance.BorderSize = 0;
-                _taskTabButtons[i].BackColor = selected ? Color.FromArgb(53, 105, 164) : InkColor;
+                _taskTabButtons[i].BackColor = selected ? _accentColor : _inkColor;
                 _taskTabButtons[i].ForeColor = Color.White;
             }
 
@@ -551,7 +628,7 @@ namespace PVZ
             {
                 BorderStyle = BorderStyle.FixedSingle,
                 Size = new Size(220, 112),
-                BackColor = SurfaceColor,
+                BackColor = _surfaceColor,
                 Margin = new Padding(0, 0, 0, 6),
                 Tag = test,
             };
@@ -565,7 +642,7 @@ namespace PVZ
                 TabStop = false,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(248, 250, 252),
-                ForeColor = MutedColor,
+                ForeColor = _mutedColor,
                 Cursor = Cursors.Hand,
             };
             remove.FlatAppearance.BorderSize = 0;
@@ -576,7 +653,7 @@ namespace PVZ
                 Text = "ВВОД",
                 AutoSize = true,
                 Font = new Font("Segoe UI", 8F, FontStyle.Bold),
-                ForeColor = MutedColor,
+                ForeColor = _mutedColor,
                 Location = new Point(5, 3),
             };
             var outputLabel = new Label
@@ -584,7 +661,7 @@ namespace PVZ
                 Text = "РЕЗУЛЬТАТ",
                 AutoSize = true,
                 Font = new Font("Segoe UI", 8F, FontStyle.Bold),
-                ForeColor = MutedColor,
+                ForeColor = _mutedColor,
                 Location = new Point(110, 3),
             };
             var input = new TextBox
@@ -619,7 +696,7 @@ namespace PVZ
                 Text = "Баллы:",
                 AutoSize = true,
                 Location = new Point(128, 82),
-                ForeColor = MutedColor,
+                ForeColor = _mutedColor,
             };
             var points = new TextBox
             {
@@ -708,7 +785,8 @@ namespace PVZ
                 checkBox3.Checked,
                 checkBox1.Checked,
                 checkBox2.Checked,
-                checkBox5.Checked);
+                checkBox5.Checked,
+                _allowedCompilers);
 
             UseWaitCursor = true;
             Enabled = false;
