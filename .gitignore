@@ -11,6 +11,9 @@
 [Dd]ebug/
 [Rr]elease/
 publish-test-out/
+_testpub/
+--launch
+tools/PascalABC/
 **/PlayerTemplate/
 
 # NuGet

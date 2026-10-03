@@ -160,7 +160,7 @@ internal sealed class TeacherOnlineCabinetForm : Form
             _serverUrl = await TaskbookOnlineClient.ResolveServerUrlAsync();
             _apiKey = await TeacherOnlineCredentials.EnsureApiKeyAsync(_serverUrl);
             _status.Text = "Загрузка задачника…";
-            var result = await TaskbookPublisher.UploadOnlineAsync(_document, _serverUrl, _apiKey);
+            var result = await UploadWithFreshTeacherKeyIfNeededAsync();
             if (!result.Success)
             {
                 _status.Text = result.ErrorMessage ?? "Не удалось загрузить задачник.";
@@ -186,6 +186,24 @@ internal sealed class TeacherOnlineCabinetForm : Form
             UseWaitCursor = false;
         }
     }
+
+    private async Task<TaskbookPublishResult> UploadWithFreshTeacherKeyIfNeededAsync()
+    {
+        if (_apiKey is null || _serverUrl is null)
+            return new TaskbookPublishResult { Success = false, ErrorMessage = "Сервер не настроен." };
+
+        var result = await TaskbookPublisher.UploadOnlineAsync(_document, _serverUrl, _apiKey);
+        if (result.Success || !IsStaleTeacherKeyError(result.ErrorMessage))
+            return result;
+
+        TeacherOnlineCredentials.ClearStoredApiKey();
+        _apiKey = await TeacherOnlineCredentials.EnsureApiKeyAsync(_serverUrl);
+        return await TaskbookPublisher.UploadOnlineAsync(_document, _serverUrl, _apiKey);
+    }
+
+    private static bool IsStaleTeacherKeyError(string? message) =>
+        message is not null &&
+        message.Contains("Ключ учителя неверен", StringComparison.Ordinal);
 
     private async Task RefreshStudentsAsync(bool silent = false)
     {
