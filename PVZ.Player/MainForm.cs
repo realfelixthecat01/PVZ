@@ -5,12 +5,13 @@ namespace PVZ.Player;
 
 internal sealed class MainForm : Form
 {
-    private static readonly Color CanvasColor = Color.FromArgb(244, 246, 249);
-    private static readonly Color SurfaceColor = Color.White;
-    private static readonly Color InkColor = Color.FromArgb(30, 41, 59);
-    private static readonly Color MutedColor = Color.FromArgb(100, 116, 139);
-    private static readonly Color BorderColor = Color.FromArgb(218, 226, 235);
-    private static readonly Color AccentColor = Color.FromArgb(37, 99, 165);
+    private static readonly Color CanvasColor = Color.FromArgb(17, 24, 39);
+    private static readonly Color SurfaceColor = Color.FromArgb(31, 41, 55);
+    private static readonly Color RaisedSurfaceColor = Color.FromArgb(38, 50, 68);
+    private static readonly Color InkColor = Color.FromArgb(226, 232, 240);
+    private static readonly Color MutedColor = Color.FromArgb(148, 163, 184);
+    private static readonly Color BorderColor = Color.FromArgb(71, 85, 105);
+    private static readonly Color AccentColor = Color.FromArgb(37, 99, 235);
 
     private readonly TaskbookDocument _document;
     private readonly TabControl _tabs;
@@ -32,7 +33,7 @@ internal sealed class MainForm : Form
     private bool _explorerStopped;
     private bool _maxScoreCongratsShown;
 
-    public MainForm()
+    public MainForm(TaskbookDocument document)
     {
         Text = "Пункт Выдачи Задач — тест";
         Width = 1000;
@@ -51,7 +52,7 @@ internal sealed class MainForm : Form
             // optional window icon
         }
 
-        _document = EmbeddedTaskbook.LoadForRunningApp();
+        _document = document;
         MinimumSize = new Size(900, 600);
         ClientSize = new Size(1180, 780);
         BackColor = CanvasColor;
@@ -121,7 +122,7 @@ internal sealed class MainForm : Form
                 case Button button:
                     button.FlatStyle = FlatStyle.Flat;
                     button.FlatAppearance.BorderColor = BorderColor;
-                    button.BackColor = Color.FromArgb(237, 242, 248);
+                    button.BackColor = RaisedSurfaceColor;
                     button.ForeColor = InkColor;
                     button.Cursor = Cursors.Hand;
                     if (button.Text.Contains("Начать", StringComparison.OrdinalIgnoreCase) ||

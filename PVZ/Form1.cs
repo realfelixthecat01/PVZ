@@ -19,15 +19,16 @@ namespace PVZ
         private FlowLayoutPanel _taskTabsFlow = null!;
         private bool _layingOutTests;
         private TaskbookCompilerFlags _allowedCompilers = TaskbookCompilerFlags.All;
-        private bool _isDarkTheme;
+        private BuilderThemeMode _themeMode = BuilderThemeMode.Dark;
         private Button _btnAllowedCompilers = null!;
         private Button _btnColorScheme = null!;
-        private Color _canvasColor = Color.FromArgb(244, 246, 249);
-        private Color _surfaceColor = Color.White;
-        private Color _inkColor = Color.FromArgb(30, 41, 59);
-        private Color _mutedColor = Color.FromArgb(100, 116, 139);
-        private Color _borderColor = Color.FromArgb(218, 226, 235);
-        private Color _accentColor = Color.FromArgb(37, 99, 165);
+        private Color _canvasColor = Color.FromArgb(17, 24, 39);
+        private Color _surfaceColor = Color.FromArgb(31, 41, 55);
+        private Color _raisedSurfaceColor = Color.FromArgb(38, 50, 68);
+        private Color _inkColor = Color.FromArgb(226, 232, 240);
+        private Color _mutedColor = Color.FromArgb(148, 163, 184);
+        private Color _borderColor = Color.FromArgb(71, 85, 105);
+        private Color _accentColor = Color.FromArgb(37, 99, 235);
         private const int TaskTabRowHeight = 30;
         private const string TestRemoveButtonTag = "test-remove";
         private const int TestCloseButtonReserve = 26;
@@ -35,6 +36,13 @@ namespace PVZ
         public Form1()
         {
             InitializeComponent();
+            var settings = BuilderThemePreferences.Load(out var settingsWarning);
+            _themeMode = settings.Mode;
+            _accentColor = Color.FromArgb(settings.AccentArgb);
+            SetThemeColors();
+            if (settingsWarning != null)
+                MessageBox.Show(settingsWarning, "Настройки темы", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
             MinimumSize = new Size(1000, 680);
             ClientSize = new Size(1120, 720);
             BackColor = _canvasColor;
@@ -75,11 +83,11 @@ namespace PVZ
 
             button3.Visible = false;
             panel1.BorderStyle = BorderStyle.None;
-            panel1.BackColor = _inkColor;
+            panel1.BackColor = _raisedSurfaceColor;
             panel2.BorderStyle = BorderStyle.None;
             panel2.BackColor = _surfaceColor;
             panel3.BorderStyle = BorderStyle.None;
-            panel3.BackColor = Color.FromArgb(247, 249, 252);
+            panel3.BackColor = _raisedSurfaceColor;
 
             _headerPanel = new Panel { BackColor = _canvasColor };
             _headerAccent = new Panel { BackColor = _accentColor };
@@ -115,6 +123,7 @@ namespace PVZ
                 Location = new Point(8, 4),
                 Size = new Size(panel1.Width - 50, 40),
                 AutoScroll = true,
+                BackColor = _raisedSurfaceColor,
             };
             _taskTabsFlow = new FlowLayoutPanel
             {
@@ -124,6 +133,7 @@ namespace PVZ
                 WrapContents = false,
                 Margin = new Padding(0),
                 Padding = new Padding(0),
+                BackColor = _raisedSurfaceColor,
             };
             _taskTabsScroll.Controls.Add(_taskTabsFlow);
             panel1.Controls.Add(_taskTabsScroll);
@@ -136,6 +146,7 @@ namespace PVZ
                 AutoScroll = true,
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
+                BackColor = _raisedSurfaceColor,
             };
             _testsFlow.HorizontalScroll.Enabled = false;
             _testsFlow.HorizontalScroll.Visible = false;
@@ -167,11 +178,15 @@ namespace PVZ
             };
             _btnColorScheme.Click += (_, _) =>
             {
-                var isDark = _isDarkTheme;
-                if (!BuilderSettingsDialogs.TryPickColorScheme(this, ref isDark))
+                if (!BuilderSettingsDialogs.TryPickColorScheme(
+                        this,
+                        _themeMode,
+                        _accentColor,
+                        out var mode,
+                        out var accent))
                     return;
 
-                ApplyBuilderTheme(isDark);
+                ApplyBuilderTheme(mode, accent);
             };
 
             Controls.Add(_btnAllowedCompilers);
@@ -254,13 +269,15 @@ namespace PVZ
                     case Button button:
                         button.FlatStyle = FlatStyle.Flat;
                         button.FlatAppearance.BorderColor = _borderColor;
-                        button.BackColor = _isDarkTheme ? Color.FromArgb(51, 65, 85) : Color.FromArgb(237, 242, 248);
+                        button.BackColor = _themeMode == BuilderThemeMode.Light
+                            ? Color.FromArgb(237, 242, 248)
+                            : _raisedSurfaceColor;
                         button.Cursor = Cursors.Hand;
                         button.Height = Math.Max(button.Height, 30);
                         if (button.Name == "button1")
                         {
                             button.BackColor = _accentColor;
-                            button.ForeColor = Color.White;
+                            button.ForeColor = GetContrastingTextColor(_accentColor);
                             button.FlatAppearance.BorderColor = _accentColor;
                             button.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
                         }
@@ -273,7 +290,9 @@ namespace PVZ
                         }
                         else if (label.Name == "headerEyebrow")
                         {
-                            label.ForeColor = _accentColor;
+                            label.ForeColor = HasAccentContrast()
+                                ? _accentColor
+                                : _mutedColor;
                         }
                         else if (label.Name == "label1" || label.Name == "label2")
                         {
@@ -291,34 +310,27 @@ namespace PVZ
             }
         }
 
-        private void ApplyBuilderTheme(bool isDark)
+        private void ApplyBuilderTheme(BuilderThemeMode mode, Color accentColor)
         {
-            _isDarkTheme = isDark;
-            if (isDark)
-            {
-                _canvasColor = Color.FromArgb(30, 41, 59);
-                _surfaceColor = Color.FromArgb(38, 50, 68);
-                _inkColor = Color.FromArgb(226, 232, 240);
-                _mutedColor = Color.FromArgb(148, 163, 184);
-                _borderColor = Color.FromArgb(71, 85, 105);
-            }
-            else
-            {
-                _canvasColor = Color.FromArgb(244, 246, 249);
-                _surfaceColor = Color.White;
-                _inkColor = Color.FromArgb(30, 41, 59);
-                _mutedColor = Color.FromArgb(100, 116, 139);
-                _borderColor = Color.FromArgb(218, 226, 235);
-            }
+            _themeMode = mode;
+            _accentColor = accentColor;
+            SetThemeColors();
 
             BackColor = _canvasColor;
             ForeColor = _inkColor;
             _headerPanel.BackColor = _canvasColor;
+            _headerAccent.BackColor = _accentColor;
+            _headerEyebrow.ForeColor = HasAccentContrast()
+                ? _accentColor
+                : _mutedColor;
             _headerTitle.ForeColor = _inkColor;
             _headerSubtitle.ForeColor = _mutedColor;
-            panel1.BackColor = _inkColor;
+            panel1.BackColor = _raisedSurfaceColor;
             panel2.BackColor = _surfaceColor;
-            panel3.BackColor = isDark ? Color.FromArgb(45, 55, 72) : Color.FromArgb(247, 249, 252);
+            panel3.BackColor = _raisedSurfaceColor;
+            _taskTabsScroll.BackColor = _raisedSurfaceColor;
+            _taskTabsFlow.BackColor = _raisedSurfaceColor;
+            _testsFlow.BackColor = _raisedSurfaceColor;
 
             StyleEditorControls(this);
             UpdateTaskTabSelection();
@@ -326,9 +338,73 @@ namespace PVZ
             foreach (Control control in _testsFlow.Controls)
             {
                 if (control is Panel panel)
+                {
                     panel.BackColor = _surfaceColor;
+                    foreach (Control child in panel.Controls)
+                    {
+                        if (child is Button button && (string?)button.Tag == TestRemoveButtonTag)
+                        {
+                            button.BackColor = _raisedSurfaceColor;
+                            button.ForeColor = _mutedColor;
+                        }
+                    }
+                }
+            }
+
+            if (!BuilderThemePreferences.TrySave(
+                    new BuilderThemeSettings(_themeMode, _accentColor.ToArgb()),
+                    out var error))
+                MessageBox.Show(this, $"Не удалось сохранить настройки темы: {error}", "Настройки темы", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        private void SetThemeColors()
+        {
+            if (_themeMode == BuilderThemeMode.Light)
+            {
+                _canvasColor = Color.FromArgb(244, 246, 249);
+                _surfaceColor = Color.White;
+                _raisedSurfaceColor = Color.FromArgb(247, 249, 252);
+                _inkColor = Color.FromArgb(30, 41, 59);
+                _mutedColor = Color.FromArgb(100, 116, 139);
+                _borderColor = Color.FromArgb(218, 226, 235);
+            }
+            else
+            {
+                _canvasColor = Color.FromArgb(17, 24, 39);
+                _surfaceColor = Color.FromArgb(31, 41, 55);
+                _raisedSurfaceColor = Color.FromArgb(38, 50, 68);
+                _inkColor = Color.FromArgb(226, 232, 240);
+                _mutedColor = Color.FromArgb(148, 163, 184);
+                _borderColor = Color.FromArgb(71, 85, 105);
             }
         }
+
+        private bool HasAccentContrast()
+        {
+            static double Luminance(Color color)
+            {
+                static double Linearize(byte channel)
+                {
+                    var value = channel / 255d;
+                    return value <= 0.04045 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
+                }
+
+                return 0.2126 * Linearize(color.R)
+                    + 0.7152 * Linearize(color.G)
+                    + 0.0722 * Linearize(color.B);
+            }
+
+            var accentLuminance = Luminance(_accentColor);
+            var canvasLuminance = Luminance(_canvasColor);
+            var contrast = (Math.Max(accentLuminance, canvasLuminance) + 0.05)
+                / (Math.Min(accentLuminance, canvasLuminance) + 0.05);
+            return contrast >= 3;
+        }
+
+        private static Color GetContrastingTextColor(Color background) =>
+            background.R * 299 + background.G * 587 + background.B * 114 >= 150_000
+                ? Color.FromArgb(17, 24, 39)
+                : Color.White;
 
         private void WireEvents()
         {
@@ -387,7 +463,7 @@ namespace PVZ
                     Size = new Size(94, TaskTabRowHeight),
                     Margin = new Padding(0),
                     FlatStyle = FlatStyle.Flat,
-                    BackColor = _inkColor,
+                    BackColor = _raisedSurfaceColor,
                     ForeColor = Color.White,
                     Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
                     Cursor = Cursors.Hand,
@@ -403,8 +479,8 @@ namespace PVZ
                     Margin = new Padding(0),
                     FlatStyle = FlatStyle.Flat,
                     FlatAppearance = { BorderSize = 0 },
-                    BackColor = Color.FromArgb(54, 65, 82),
-                    ForeColor = Color.White,
+                    BackColor = _raisedSurfaceColor,
+                    ForeColor = _mutedColor,
                     Cursor = Cursors.Hand,
                 };
                 removeTask.Click += (_, _) => DeleteTask(index);
@@ -452,8 +528,14 @@ namespace PVZ
                 _taskTabButtons[i].Font = new Font(_taskTabButtons[i].Font, selected ? FontStyle.Bold : FontStyle.Regular);
                 _taskTabButtons[i].FlatStyle = FlatStyle.Flat;
                 _taskTabButtons[i].FlatAppearance.BorderSize = 0;
-                _taskTabButtons[i].BackColor = selected ? _accentColor : _inkColor;
-                _taskTabButtons[i].ForeColor = Color.White;
+                _taskTabButtons[i].BackColor = selected
+                    ? _accentColor
+                    : _themeMode == BuilderThemeMode.Light
+                        ? _inkColor
+                        : _raisedSurfaceColor;
+                _taskTabButtons[i].ForeColor = selected
+                    ? GetContrastingTextColor(_accentColor)
+                    : Color.White;
             }
 
             if (_currentTaskIndex >= 0 && _currentTaskIndex < _taskTabButtons.Count)
@@ -641,7 +723,7 @@ namespace PVZ
                 Size = new Size(22, 22),
                 TabStop = false,
                 FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(248, 250, 252),
+                BackColor = _raisedSurfaceColor,
                 ForeColor = _mutedColor,
                 Cursor = Cursors.Hand,
             };
@@ -673,6 +755,8 @@ namespace PVZ
                 Text = test.Input,
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = new Font("Consolas", 9F),
+                BackColor = _surfaceColor,
+                ForeColor = _inkColor,
             };
             var output = new TextBox
             {
@@ -683,6 +767,8 @@ namespace PVZ
                 Text = test.Output,
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = new Font("Consolas", 9F),
+                BackColor = _surfaceColor,
+                ForeColor = _inkColor,
             };
             var show = new CheckBox
             {
@@ -690,6 +776,7 @@ namespace PVZ
                 AutoSize = true,
                 Location = new Point(4, 81),
                 Checked = test.ShowToStudent,
+                ForeColor = _mutedColor,
             };
             var pointsLabel = new Label
             {
@@ -705,6 +792,8 @@ namespace PVZ
                 Size = new Size(38, 23),
                 Text = test.Points > 0 ? test.Points.ToString() : "",
                 BorderStyle = BorderStyle.FixedSingle,
+                BackColor = _surfaceColor,
+                ForeColor = _inkColor,
             };
 
             void Bind()
@@ -770,11 +859,29 @@ namespace PVZ
                 return;
             }
 
+            if (!BuilderSettingsDialogs.TryPickDeliveryMode(this, out var online))
+                return;
+
+            var downloadsPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Downloads");
+            try
+            {
+                Directory.CreateDirectory(downloadsPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                MessageBox.Show(this, $"Не удалось открыть папку «Загрузки»: {ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
             using var dlg = new SaveFileDialog
             {
-                Filter = "Задачник (*.exe)|*.exe",
-                FileName = "Задачник.exe",
-                Title = "Сохранить exe задачника",
+                Filter = "Задачник PVZ (*.pvz)|*.pvz",
+                DefaultExt = "pvz",
+                AddExtension = true,
+                FileName = "Задачник.pvz",
+                InitialDirectory = downloadsPath,
+                Title = online ? "Подготовить онлайн-задачник" : "Сохранить оффлайн-задачник",
             };
             if (dlg.ShowDialog() != DialogResult.OK)
                 return;
@@ -792,18 +899,23 @@ namespace PVZ
             Enabled = false;
             try
             {
-                var result = await TaskbookPublisher.PublishExeAsync(dlg.FileName, document);
+                var result = await Task.Run(() => online
+                    ? TaskbookPublisher.PrepareOnlineUploadPackage(dlg.FileName, document)
+                    : TaskbookPublisher.PublishPackage(dlg.FileName, document));
                 if (!result.Success)
                 {
-                    MessageBox.Show(result.ErrorMessage ?? "Ошибка сборки.", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(result.ErrorMessage ?? "Не удалось подготовить задачник.", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
+                var message = online
+                    ? "Файл .pvz сжат и сохранён только на этом компьютере; контрольная сумма помогает обнаружить повреждение, но файл не зашифрован. Серверной админ-панели, загрузки и выдачи токена пока нет."
+                    : "Файл .pvz сжат и снабжён контрольной суммой, но не зашифрован. Передайте файл ученику для оффлайн-открытия; пароль преподавателя не нужен ученику и остаётся только у вас.";
                 MessageBox.Show(
-                    $"Задачник создан:\n{result.OutputExePath}",
+                    $"{message}\n\n{result.OutputPath}",
                     Text,
                     MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                    online ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
             }
             finally
             {

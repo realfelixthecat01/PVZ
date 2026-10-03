@@ -4,6 +4,61 @@ namespace PVZ;
 
 internal static class BuilderSettingsDialogs
 {
+    public static bool TryPickDeliveryMode(IWin32Window owner, out bool online)
+    {
+        using var dlg = new Form
+        {
+            Text = "Способ передачи задачника",
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            StartPosition = FormStartPosition.CenterParent,
+            MinimizeBox = false,
+            MaximizeBox = false,
+            ShowInTaskbar = false,
+            ClientSize = new Size(410, 230),
+        };
+
+        var title = new Label
+        {
+            Text = "Как подготовить задачник?",
+            Font = new Font("Segoe UI", 11F, FontStyle.Bold),
+            AutoSize = true,
+            Location = new Point(16, 16),
+        };
+        var offline = new RadioButton
+        {
+            Text = "Оффлайн — передать файл .pvz ученику",
+            AutoSize = true,
+            Checked = true,
+            Location = new Point(20, 58),
+        };
+        var onlineChoice = new RadioButton
+        {
+            Text = "Онлайн — подготовить .pvz для будущей загрузки на сервер",
+            AutoSize = true,
+            Location = new Point(20, 90),
+        };
+        var note = new Label
+        {
+            Text = "Сервер/API и серверная админ-панель не подключены: входа, загрузки и выдачи токена пока нет.\nПароль преподавателя относится только к локальной панели учителя в задачнике; не сообщайте его ученикам. Файл .pvz сжат и проверяется по контрольной сумме, но не зашифрован.",
+            AutoSize = false,
+            Location = new Point(20, 120),
+            Size = new Size(370, 62),
+            ForeColor = Color.FromArgb(100, 116, 139),
+        };
+        var ok = new Button { Text = "Продолжить", DialogResult = DialogResult.OK, Location = new Point(220, 197), Width = 90 };
+        var cancel = new Button { Text = "Отмена", DialogResult = DialogResult.Cancel, Location = new Point(316, 197), Width = 74 };
+        dlg.Controls.AddRange([title, offline, onlineChoice, note, ok, cancel]);
+        dlg.AcceptButton = ok;
+        dlg.CancelButton = cancel;
+
+        online = false;
+        if (dlg.ShowDialog(owner) != DialogResult.OK)
+            return false;
+
+        online = onlineChoice.Checked;
+        return true;
+    }
+
     public static bool TryPickAllowedCompilers(IWin32Window owner, ref TaskbookCompilerFlags allowed)
     {
         using var dlg = new Form
@@ -65,7 +120,12 @@ internal static class BuilderSettingsDialogs
         return true;
     }
 
-    public static bool TryPickColorScheme(IWin32Window owner, ref bool isDark)
+    public static bool TryPickColorScheme(
+        IWin32Window owner,
+        BuilderThemeMode currentMode,
+        Color currentAccent,
+        out BuilderThemeMode mode,
+        out Color accent)
     {
         using var dlg = new Form
         {
@@ -75,41 +135,95 @@ internal static class BuilderSettingsDialogs
             MinimizeBox = false,
             MaximizeBox = false,
             ShowInTaskbar = false,
-            ClientSize = new Size(340, 130),
+            ClientSize = new Size(386, 190),
         };
 
         var label = new Label
         {
-            Text = "Оформление только для программы-конструктора:",
+            Text = "Выберите оформление:",
             AutoSize = false,
             Location = new Point(12, 12),
-            Size = new Size(310, 32),
+            Size = new Size(350, 24),
         };
         var light = new RadioButton
         {
             Text = "Светлая",
-            Location = new Point(16, 48),
+            Location = new Point(16, 42),
             AutoSize = true,
-            Checked = !isDark,
+            Checked = currentMode == BuilderThemeMode.Light,
         };
         var dark = new RadioButton
         {
             Text = "Тёмная",
-            Location = new Point(120, 48),
+            Location = new Point(120, 42),
             AutoSize = true,
-            Checked = isDark,
+            Checked = currentMode == BuilderThemeMode.Dark,
+        };
+        var custom = new RadioButton
+        {
+            Text = "Пользовательская",
+            Location = new Point(220, 42),
+            AutoSize = true,
+            Checked = currentMode == BuilderThemeMode.Custom,
+        };
+        var accentPreview = new Panel
+        {
+            Location = new Point(16, 82),
+            Size = new Size(28, 24),
+            BackColor = currentAccent,
+            BorderStyle = BorderStyle.FixedSingle,
+        };
+        var accentLabel = new Label
+        {
+            Text = "Цвет акцента",
+            AutoSize = true,
+            Location = new Point(52, 86),
+        };
+        var accentHint = new Label
+        {
+            Text = "Только для кнопок и активной задачи",
+            AutoSize = true,
+            Location = new Point(52, 106),
+        };
+        var chooseAccent = new Button
+        {
+            Text = "Выбрать цвет…",
+            Location = new Point(240, 78),
+            Size = new Size(130, 32),
+        };
+        chooseAccent.Click += (_, _) =>
+        {
+            using var colorDialog = new ColorDialog
+            {
+                Color = accentPreview.BackColor,
+                FullOpen = true,
+            };
+            if (colorDialog.ShowDialog(dlg) != DialogResult.OK)
+                return;
+
+            accentPreview.BackColor = colorDialog.Color;
+            custom.Checked = true;
         };
 
-        var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Location = new Point(166, 88), Width = 75 };
-        var cancel = new Button { Text = "Отмена", DialogResult = DialogResult.Cancel, Location = new Point(247, 88), Width = 75 };
-        dlg.Controls.AddRange([label, light, dark, ok, cancel]);
+        var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Location = new Point(208, 144), Width = 75 };
+        var cancel = new Button { Text = "Отмена", DialogResult = DialogResult.Cancel, Location = new Point(289, 144), Width = 81 };
+        dlg.Controls.AddRange([label, light, dark, custom, accentPreview, accentLabel, accentHint, chooseAccent, ok, cancel]);
         dlg.AcceptButton = ok;
         dlg.CancelButton = cancel;
 
         if (dlg.ShowDialog(owner) != DialogResult.OK)
+        {
+            mode = currentMode;
+            accent = currentAccent;
             return false;
+        }
 
-        isDark = dark.Checked;
+        mode = light.Checked
+            ? BuilderThemeMode.Light
+            : custom.Checked
+                ? BuilderThemeMode.Custom
+                : BuilderThemeMode.Dark;
+        accent = accentPreview.BackColor;
         return true;
     }
 }

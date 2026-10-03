@@ -7,10 +7,19 @@ public static class EmbeddedTaskbook
 {
     public const string ResourceName = "taskbook.json";
 
+    public static bool TryLoadAppendedForRunningApp(out TaskbookDocument? document)
+    {
+        document = null;
+        var exePath = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exePath))
+            return false;
+
+        return TaskbookPayload.TryReadAppended(exePath, out document) && document != null;
+    }
+
     public static TaskbookDocument LoadForRunningApp()
     {
-        var exePath = Environment.ProcessPath;
-        if (!string.IsNullOrEmpty(exePath) && TaskbookPayload.TryReadAppended(exePath, out var appended) && appended != null)
+        if (TryLoadAppendedForRunningApp(out var appended) && appended != null)
             return appended;
 
         return LoadFromAssembly(Assembly.GetExecutingAssembly());
