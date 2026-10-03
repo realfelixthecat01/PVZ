@@ -28,6 +28,12 @@ internal static class TeacherOnlineCredentials
         }
     }
 
+    public static void ClearStoredApiKey()
+    {
+        if (File.Exists(CredentialsPath))
+            File.Delete(CredentialsPath);
+    }
+
     public static async Task<string> EnsureApiKeyAsync(string serverUrl, CancellationToken cancellationToken = default)
     {
         var existing = TryLoadApiKey();
