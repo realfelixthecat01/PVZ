@@ -2,8 +2,11 @@ using PVZ.Core;
 
 namespace PVZ.Player;
 
-internal sealed class StudentStartForm : Form
+public sealed class StudentStartForm : Form
 {
+    private const int ContentWidth = 680;
+    private const int FieldWidth = 360;
+
     private static readonly Color Canvas = Color.FromArgb(17, 24, 39);
     private static readonly Color Surface = Color.FromArgb(31, 41, 55);
     private static readonly Color RaisedSurface = Color.FromArgb(38, 50, 68);
@@ -12,8 +15,11 @@ internal sealed class StudentStartForm : Form
     private static readonly Color Border = Color.FromArgb(71, 85, 105);
     private static readonly Color Accent = Color.FromArgb(37, 99, 235);
 
+    private readonly List<(Control Control, int Top)> _layoutItems = new();
+
     public StudentStartForm()
     {
+        PvzFormIcon.TryApply(this);
         Text = "Пункт Выдачи Задачек — ученик";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(720, 500);
@@ -21,15 +27,16 @@ internal sealed class StudentStartForm : Form
         BackColor = Canvas;
         ForeColor = Ink;
         Font = new Font("Segoe UI", 10F);
+        Resize += (_, _) => RelayoutCentered();
         ShowWelcome();
     }
 
     private void ShowWelcome()
     {
         ClearScreen();
-        var title = CreateLabel("Добро пожаловать!", 25F, FontStyle.Bold);
-        var subtitle = CreateLabel("Пункт Выдачи Задачек", 13F, FontStyle.Regular, Muted);
-        var info = CreateLabel("Чтобы начать, выберите способ получения задачника.", 10.5F, FontStyle.Regular, Muted);
+        var title = CreateCenteredLabel("Добро пожаловать!", 25F, FontStyle.Bold);
+        var subtitle = CreateCenteredLabel("Пункт Выдачи Задачек", 13F, FontStyle.Regular, Muted);
+        var info = CreateCenteredLabel("Чтобы начать, выберите способ получения задачника.", 10.5F, FontStyle.Regular, Muted);
         var continueButton = CreateButton("Продолжить", primary: true);
         continueButton.Click += (_, _) => ShowSourceChoices();
         AddCentered(title, 95);
@@ -41,8 +48,8 @@ internal sealed class StudentStartForm : Form
     private void ShowSourceChoices()
     {
         ClearScreen();
-        var title = CreateLabel("Получение задачника", 23F, FontStyle.Bold);
-        var subtitle = CreateLabel("Оффлайн откроет файл на устройстве; онлайн потребует подключения к серверу.", 10.5F, FontStyle.Regular, Muted);
+        var title = CreateCenteredLabel("Получение задачника", 23F, FontStyle.Bold);
+        var subtitle = CreateCenteredLabel("Оффлайн откроет файл на устройстве; онлайн потребует подключения к серверу.", 10.5F, FontStyle.Regular, Muted);
         var offline = CreateButton("Открыть оффлайн-файл .pvz", primary: true);
         var online = CreateButton("Ввести онлайн-токен", primary: false);
         var back = CreateButton("Назад", primary: false);
@@ -59,50 +66,93 @@ internal sealed class StudentStartForm : Form
     private void ShowOnlineTokenEntry()
     {
         ClearScreen();
-        var title = CreateLabel("Онлайн-задачник", 22F, FontStyle.Bold);
-        var subtitle = CreateLabel(
-            "Токен должен выдать сервер. Серверной админ-панели и проверки токенов пока нет.\nПароль преподавателя предназначен только учителю: не вводите его здесь и не передавайте ученикам.",
+        var title = CreateCenteredLabel("Онлайн-задачник", 22F, FontStyle.Bold);
+        var subtitle = CreateCenteredLabel(
+            "Введите токен, выданный сервером после загрузки задачника учителем.\nНужны имя, фамилия и класс; личный API-ключ учителя и пароль преподавателя ученик не вводит.",
             10.5F,
             FontStyle.Regular,
             Muted);
-        subtitle.AutoSize = false;
-        subtitle.Size = new Size(680, 46);
-        subtitle.TextAlign = ContentAlignment.MiddleCenter;
         var token = new TextBox
         {
-            Width = 360,
+            Width = FieldWidth,
             Height = 38,
-            Location = new Point((ClientSize.Width - 360) / 2, 226),
             BackColor = Surface,
             ForeColor = Ink,
             BorderStyle = BorderStyle.FixedSingle,
             PlaceholderText = "Токен задачника",
         };
+        var firstName = CreateStudentField("Имя");
+        var lastName = CreateStudentField("Фамилия");
+        var className = CreateStudentField("Класс");
         var open = CreateButton("Подключиться", primary: true);
-        open.Location = new Point((ClientSize.Width - open.Width) / 2, 284);
-        open.Click += (_, _) =>
+        open.Click += async (_, _) =>
         {
-            if (string.IsNullOrWhiteSpace(token.Text))
+            if (token.Text.Trim().Length != 6)
             {
-                MessageBox.Show(this, "Введите токен учителя.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "Введите шестизначный токен задачника.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(firstName.Text) ||
+                string.IsNullOrWhiteSpace(lastName.Text) ||
+                string.IsNullOrWhiteSpace(className.Text))
+            {
+                MessageBox.Show(this, "Укажите имя, фамилию и класс.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            MessageBox.Show(
-                this,
-                "Онлайн-доступ пока не настроен: токен не проверялся, файл с сервера не загружался. Попросите учителя передать файл .pvz и откройте его в оффлайн-режиме.",
-                Text,
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            await OpenOnlineTaskbookAsync(
+                token.Text.Trim().ToUpperInvariant(),
+                new OnlineStudentInfo(firstName.Text.Trim(), lastName.Text.Trim(), className.Text.Trim()));
         };
         var back = CreateButton("Назад", primary: false);
-        back.Location = new Point((ClientSize.Width - back.Width) / 2, 360);
         back.Click += (_, _) => ShowSourceChoices();
         AddCentered(title, 105);
         AddCentered(subtitle, 158);
-        Controls.Add(token);
-        Controls.Add(open);
-        Controls.Add(back);
+        AddCentered(token, 226);
+        AddCentered(firstName, 270);
+        AddCentered(lastName, 316);
+        AddCentered(className, 362);
+        AddCentered(open, 414);
+        AddCentered(back, 482);
+    }
+
+    private TextBox CreateStudentField(string placeholder) => new()
+    {
+        Width = FieldWidth,
+        Height = 36,
+        BackColor = Surface,
+        ForeColor = Ink,
+        BorderStyle = BorderStyle.FixedSingle,
+        PlaceholderText = placeholder,
+    };
+
+    private async Task OpenOnlineTaskbookAsync(string token, OnlineStudentInfo student)
+    {
+        UseWaitCursor = true;
+        Enabled = false;
+        try
+        {
+            var serverUrl = await TaskbookOnlineClient.ResolveServerUrlAsync();
+            var document = await TaskbookOnlineClient.DownloadAsync(token, serverUrl);
+            var session = await TaskbookOnlineClient.StartStudentSessionAsync(token, student, serverUrl);
+            Hide();
+            using (var taskbook = new MainForm(document, session, serverUrl))
+                taskbook.ShowDialog(this);
+            if (!IsDisposed)
+                Show();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException or HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or NotSupportedException)
+        {
+            MessageBox.Show(this, $"Не удалось получить задачник: {ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            if (!IsDisposed)
+            {
+                Enabled = true;
+                UseWaitCursor = false;
+            }
+        }
     }
 
     private void OpenOfflineTaskbook()
@@ -129,7 +179,7 @@ internal sealed class StudentStartForm : Form
         {
             document = TaskbookPackageIO.Load(dialog.FileName);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or NotSupportedException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException or NotSupportedException)
         {
             MessageBox.Show(this, $"Не удалось открыть задачник:\n{ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
@@ -149,21 +199,50 @@ internal sealed class StudentStartForm : Form
             Controls.Remove(control);
             control.Dispose();
         }
+        _layoutItems.Clear();
     }
 
     private void AddCentered(Control control, int top)
     {
-        control.Location = new Point((ClientSize.Width - control.Width) / 2, top);
+        _layoutItems.Add((control, top));
         Controls.Add(control);
+        RelayoutCentered();
     }
 
-    private Label CreateLabel(string text, float size, FontStyle style, Color? color = null) => new()
+    private void RelayoutCentered()
     {
-        Text = text,
-        AutoSize = true,
-        Font = new Font("Segoe UI", size, style),
-        ForeColor = color ?? Ink,
-    };
+        foreach (var (control, top) in _layoutItems)
+        {
+            if (control is Label label && label.AutoSize == false)
+            {
+                label.Width = ContentWidth;
+                label.Location = new Point((ClientSize.Width - ContentWidth) / 2, top);
+                continue;
+            }
+
+            control.Location = new Point((ClientSize.Width - control.Width) / 2, top);
+        }
+    }
+
+    private Label CreateCenteredLabel(string text, float size, FontStyle style, Color? color = null)
+    {
+        var font = new Font("Segoe UI", size, style);
+        var height = TextRenderer.MeasureText(
+            text,
+            font,
+            new Size(ContentWidth, int.MaxValue),
+            TextFormatFlags.WordBreak | TextFormatFlags.HorizontalCenter).Height + 8;
+        return new Label
+        {
+            Text = text,
+            AutoSize = false,
+            Width = ContentWidth,
+            Height = height,
+            Font = font,
+            ForeColor = color ?? Ink,
+            TextAlign = ContentAlignment.TopCenter,
+        };
+    }
 
     private static Button CreateButton(string text, bool primary) => new()
     {

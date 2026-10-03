@@ -2,4 +2,6 @@
   <Project Path="PVZ/PVZ.csproj" />
   <Project Path="PVZ.Core/PVZ.Core.csproj" />
   <Project Path="PVZ.Player/PVZ.Player.csproj" />
+  <Project Path="PVZ.Server/PVZ.Server.csproj" />
+  <Project Path="PVZ.Server.Tests/PVZ.Server.Tests.csproj" />
 </Solution>

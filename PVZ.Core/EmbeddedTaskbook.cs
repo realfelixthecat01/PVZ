@@ -14,7 +14,15 @@ public static class EmbeddedTaskbook
         if (string.IsNullOrEmpty(exePath))
             return false;
 
-        return TaskbookPayload.TryReadAppended(exePath, out document) && document != null;
+        try
+        {
+            return TaskbookPayload.TryReadAppended(exePath, out document) && document != null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException or NotSupportedException)
+        {
+            document = null;
+            return false;
+        }
     }
 
     public static TaskbookDocument LoadForRunningApp()
