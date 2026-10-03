@@ -30,6 +30,7 @@ internal sealed class MainForm : Form
     private Label _totalScoreLabel = null!;
     private bool _allowClose;
     private bool _explorerStopped;
+    private bool _maxScoreCongratsShown;
 
     public MainForm()
     {
@@ -542,5 +543,16 @@ internal sealed class MainForm : Form
 
         _totalScoreLabel.Text = $"Итого: {earnedTotal}/{maxTotal}";
         ApplySequentialUnlock();
+
+        if (maxTotal > 0 && earnedTotal >= maxTotal && !_maxScoreCongratsShown)
+        {
+            _maxScoreCongratsShown = true;
+            MessageBox.Show(
+                this,
+                "Поздравляем! Вы набрали максимальный балл по всему тесту. Отличная работа!",
+                "Поздравляем!",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
     }
 }
