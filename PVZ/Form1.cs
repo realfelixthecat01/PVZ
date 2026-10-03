@@ -862,6 +862,55 @@ namespace PVZ
             if (!BuilderSettingsDialogs.TryPickDeliveryMode(this, out var online))
                 return;
 
+            var document = TaskbookPublisher.CreateDocument(
+                _tasks,
+                textBox4.Text,
+                checkBox3.Checked,
+                checkBox1.Checked,
+                checkBox2.Checked,
+                checkBox5.Checked,
+                _allowedCompilers);
+
+            if (online)
+            {
+                var serverUrl = TaskbookOnlineClient.GetConfiguredServerUrl();
+                var adminKey = Environment.GetEnvironmentVariable("PVZ_SERVER_ADMIN_KEY");
+                if (string.IsNullOrWhiteSpace(adminKey))
+                {
+                    MessageBox.Show(
+                        this,
+                        "Для загрузки задайте PVZ_SERVER_ADMIN_KEY на компьютере учителя. Это ключ API сервера, а не пароль преподавателя из задачника.",
+                        Text,
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
+
+                UseWaitCursor = true;
+                Enabled = false;
+                try
+                {
+                    var result = await TaskbookPublisher.UploadOnlineAsync(document, serverUrl, adminKey);
+                    if (!result.Success)
+                    {
+                        MessageBox.Show(result.ErrorMessage ?? "Не удалось загрузить задачник.", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+
+                    MessageBox.Show(
+                        $"Задачник загружен на {serverUrl}.\nПередайте ученикам только токен доступа; ключ администратора и пароль преподавателя им не нужны.\n\nТокен (сохраните его, повторно сервер его не покажет):\n{result.AccessToken}\n\nДействует до: {result.TokenExpiresAt:yyyy-MM-dd HH:mm} UTC",
+                        Text,
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
+                finally
+                {
+                    Enabled = true;
+                    UseWaitCursor = false;
+                }
+                return;
+            }
+
             var downloadsPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                 "Downloads");
@@ -881,41 +930,27 @@ namespace PVZ
                 AddExtension = true,
                 FileName = "Задачник.pvz",
                 InitialDirectory = downloadsPath,
-                Title = online ? "Подготовить онлайн-задачник" : "Сохранить оффлайн-задачник",
+                Title = "Сохранить оффлайн-задачник",
             };
             if (dlg.ShowDialog() != DialogResult.OK)
                 return;
-
-            var document = TaskbookPublisher.CreateDocument(
-                _tasks,
-                textBox4.Text,
-                checkBox3.Checked,
-                checkBox1.Checked,
-                checkBox2.Checked,
-                checkBox5.Checked,
-                _allowedCompilers);
 
             UseWaitCursor = true;
             Enabled = false;
             try
             {
-                var result = await Task.Run(() => online
-                    ? TaskbookPublisher.PrepareOnlineUploadPackage(dlg.FileName, document)
-                    : TaskbookPublisher.PublishPackage(dlg.FileName, document));
+                var result = await Task.Run(() => TaskbookPublisher.PublishPackage(dlg.FileName, document));
                 if (!result.Success)
                 {
                     MessageBox.Show(result.ErrorMessage ?? "Не удалось подготовить задачник.", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
-                var message = online
-                    ? "Файл .pvz сжат и сохранён только на этом компьютере; контрольная сумма помогает обнаружить повреждение, но файл не зашифрован. Серверной админ-панели, загрузки и выдачи токена пока нет."
-                    : "Файл .pvz сжат и снабжён контрольной суммой, но не зашифрован. Передайте файл ученику для оффлайн-открытия; пароль преподавателя не нужен ученику и остаётся только у вас.";
                 MessageBox.Show(
-                    $"{message}\n\n{result.OutputPath}",
+                    $"Файл .pvz сохранён и сжат; контрольная сумма помогает обнаружить повреждение, но файл не зашифрован. Передайте файл ученику для оффлайн-открытия; пароль преподавателя не нужен ученику и остаётся только у вас.\n\n{result.OutputPath}",
                     Text,
                     MessageBoxButtons.OK,
-                    online ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+                    MessageBoxIcon.Information);
             }
             finally
             {

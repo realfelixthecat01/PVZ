@@ -61,7 +61,7 @@ internal sealed class StudentStartForm : Form
         ClearScreen();
         var title = CreateLabel("Онлайн-задачник", 22F, FontStyle.Bold);
         var subtitle = CreateLabel(
-            "Токен должен выдать сервер. Серверной админ-панели и проверки токенов пока нет.\nПароль преподавателя предназначен только учителю: не вводите его здесь и не передавайте ученикам.",
+            "Введите токен, выданный сервером после загрузки задачника учителем.\nНужен только токен: пароль преподавателя и ключ администратора ученикам не передаются.",
             10.5F,
             FontStyle.Regular,
             Muted);
@@ -80,7 +80,7 @@ internal sealed class StudentStartForm : Form
         };
         var open = CreateButton("Подключиться", primary: true);
         open.Location = new Point((ClientSize.Width - open.Width) / 2, 284);
-        open.Click += (_, _) =>
+        open.Click += async (_, _) =>
         {
             if (string.IsNullOrWhiteSpace(token.Text))
             {
@@ -88,12 +88,7 @@ internal sealed class StudentStartForm : Form
                 return;
             }
 
-            MessageBox.Show(
-                this,
-                "Онлайн-доступ пока не настроен: токен не проверялся, файл с сервера не загружался. Попросите учителя передать файл .pvz и откройте его в оффлайн-режиме.",
-                Text,
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            await OpenOnlineTaskbookAsync(token.Text.Trim());
         };
         var back = CreateButton("Назад", primary: false);
         back.Location = new Point((ClientSize.Width - back.Width) / 2, 360);
@@ -103,6 +98,35 @@ internal sealed class StudentStartForm : Form
         Controls.Add(token);
         Controls.Add(open);
         Controls.Add(back);
+    }
+
+    private async Task OpenOnlineTaskbookAsync(string token)
+    {
+        UseWaitCursor = true;
+        Enabled = false;
+        try
+        {
+            var document = await TaskbookOnlineClient.DownloadAsync(
+                token,
+                TaskbookOnlineClient.GetConfiguredServerUrl());
+            Hide();
+            using (var taskbook = new MainForm(document))
+                taskbook.ShowDialog(this);
+            if (!IsDisposed)
+                Show();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or NotSupportedException)
+        {
+            MessageBox.Show(this, $"Не удалось получить задачник: {ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            if (!IsDisposed)
+            {
+                Enabled = true;
+                UseWaitCursor = false;
+            }
+        }
     }
 
     private void OpenOfflineTaskbook()
