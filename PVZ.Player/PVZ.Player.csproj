@@ -20,4 +20,10 @@
     <EmbeddedResource Include="taskbook.json" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\PVZ\app.ico" Link="app.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

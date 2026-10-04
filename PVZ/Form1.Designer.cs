@@ -306,7 +306,6 @@
             Controls.Add(button1);
             Controls.Add(textBox4);
             Controls.Add(label3);
-            Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "Form1";
             Text = "Пункт Выдачи Задач";
             Load += Form1_Load;
