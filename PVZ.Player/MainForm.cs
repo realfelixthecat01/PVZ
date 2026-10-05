@@ -257,6 +257,7 @@ internal sealed class MainForm : Form
             TopMost = true,
             ClientSize = new Size(360, 120),
         };
+        PvzFormIcon.TryApply(dlg);
         dlg.Owner = this;
 
         var label = new Label { Text = "Введите пароль:", AutoSize = true, Location = new Point(12, 14) };

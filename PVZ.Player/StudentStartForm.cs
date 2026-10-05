@@ -37,7 +37,7 @@ public sealed class StudentStartForm : Form
         var title = CreateCenteredLabel("Добро пожаловать!", 25F, FontStyle.Bold);
         var subtitle = CreateCenteredLabel("Пункт Выдачи Задачек", 13F, FontStyle.Regular, Muted);
         var info = CreateCenteredLabel("Чтобы начать, выберите способ получения задачника.", 10.5F, FontStyle.Regular, Muted);
-        var continueButton = CreateButton("Продолжить", primary: true);
+        var continueButton = CreateButton("Продолжить", primary: true, PvzFormButtonIcons.Glyphs.Continue);
         continueButton.Click += (_, _) => ShowSourceChoices();
         AddCentered(title, 95);
         AddCentered(subtitle, 158);
@@ -50,9 +50,9 @@ public sealed class StudentStartForm : Form
         ClearScreen();
         var title = CreateCenteredLabel("Получение задачника", 23F, FontStyle.Bold);
         var subtitle = CreateCenteredLabel("Оффлайн откроет файл на устройстве; онлайн потребует подключения к серверу.", 10.5F, FontStyle.Regular, Muted);
-        var offline = CreateButton("Открыть оффлайн-файл .pvz", primary: true);
-        var online = CreateButton("Ввести онлайн-токен", primary: false);
-        var back = CreateButton("Назад", primary: false);
+        var offline = CreateButton("Открыть оффлайн-файл .pvz", primary: true, PvzFormButtonIcons.Glyphs.OpenFile);
+        var online = CreateButton("Ввести онлайн-токен", primary: false, PvzFormButtonIcons.Glyphs.Cloud);
+        var back = CreateButton("Назад", primary: false, PvzFormButtonIcons.Glyphs.Back);
         offline.Click += (_, _) => OpenOfflineTaskbook();
         online.Click += (_, _) => ShowOnlineTokenEntry();
         back.Click += (_, _) => ShowWelcome();
@@ -84,7 +84,7 @@ public sealed class StudentStartForm : Form
         var firstName = CreateStudentField("Имя");
         var lastName = CreateStudentField("Фамилия");
         var className = CreateStudentField("Класс");
-        var open = CreateButton("Подключиться", primary: true);
+        var open = CreateButton("Подключиться", primary: true, PvzFormButtonIcons.Glyphs.Connect);
         open.Click += async (_, _) =>
         {
             if (token.Text.Trim().Length != 6)
@@ -104,7 +104,7 @@ public sealed class StudentStartForm : Form
                 token.Text.Trim().ToUpperInvariant(),
                 new OnlineStudentInfo(firstName.Text.Trim(), lastName.Text.Trim(), className.Text.Trim()));
         };
-        var back = CreateButton("Назад", primary: false);
+        var back = CreateButton("Назад", primary: false, PvzFormButtonIcons.Glyphs.Back);
         back.Click += (_, _) => ShowSourceChoices();
         AddCentered(title, 105);
         AddCentered(subtitle, 158);
@@ -244,15 +244,20 @@ public sealed class StudentStartForm : Form
         };
     }
 
-    private static Button CreateButton(string text, bool primary) => new()
+    private static Button CreateButton(string text, bool primary, char iconGlyph)
     {
-        Text = text,
-        Size = new Size(360, 52),
-        FlatStyle = FlatStyle.Flat,
-        BackColor = primary ? Accent : RaisedSurface,
-        ForeColor = Color.White,
-        Font = new Font("Segoe UI", 10.5F, FontStyle.Bold),
-        Cursor = Cursors.Hand,
-        FlatAppearance = { BorderColor = primary ? Accent : Border },
-    };
+        var button = new Button
+        {
+            Text = text,
+            Size = new Size(360, 52),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = primary ? Accent : RaisedSurface,
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 10.5F, FontStyle.Bold),
+            Cursor = Cursors.Hand,
+            FlatAppearance = { BorderColor = primary ? Accent : Border },
+        };
+        PvzFormButtonIcons.Apply(button, iconGlyph, Color.White);
+        return button;
+    }
 }

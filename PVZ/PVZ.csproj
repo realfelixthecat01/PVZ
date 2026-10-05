@@ -15,6 +15,12 @@
     <ProjectReference Include="..\PVZ.Player\PVZ.Player.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="app.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
   <PropertyGroup>
     <PlayerProject>$(MSBuildThisFileDirectory)..\PVZ.Player\PVZ.Player.csproj</PlayerProject>
     <_PlayerRidSuffix Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)\</_PlayerRidSuffix>
