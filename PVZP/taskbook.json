@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "teacherPasswordHash": "xaJkEGYcGzHBewv3UXDNR4VghjrIExzdrBdDcQtJu38=",
+  "teacherPasswordSalt": "npcUpvEhcfLgsfsygCMM1g==",
+  "sequentialUnlock": true,
+  "topMost": true,
+  "fullScreen": true,
+  "killExplorer": true,
+  "tasks": [
+    {
+      "description": "67",
+      "bonusPointsForAllTests": 10,
+      "tests": [
+        {
+          "input": "67",
+          "output": "67",
+          "showToStudent": true,
+          "points": 25
+        },
+        {
+          "input": "689",
+          "output": "689",
+          "showToStudent": false,
+          "points": 25
+        }
+      ]
+    }
+  ]
+}

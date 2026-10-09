@@ -1,0 +1,10 @@
+.git
+.vs
+**/bin
+**/obj
+**/PlayerTemplate
+sessions
+zadachniki
+*.md
+docker-compose.yml
+Dockerfile

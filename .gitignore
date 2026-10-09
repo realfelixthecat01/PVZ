@@ -24,3 +24,8 @@ tools/PascalABC/
 # Others
 *.log
 *.cache
+
+# PVZS data lives next to the server exe, never in the repo
+sessions/
+zadachniki/
+*.db

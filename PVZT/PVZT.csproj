@@ -1,0 +1,94 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>PVZT</AssemblyName>
+    <RootNamespace>PVZ</RootNamespace>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifiers>win-x64;win-x86</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- dotnet publish: один самодостаточный exe (dotnet build остаётся обычным). -->
+    <PublishSelfContained>true</PublishSelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PVZ.Core\PVZ.Core.csproj" />
+    <ProjectReference Include="..\PVZP\PVZP.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="app.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <PropertyGroup>
+    <PlayerProject>$(MSBuildThisFileDirectory)..\PVZP\PVZP.csproj</PlayerProject>
+    <_PlayerRidSuffix Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)\</_PlayerRidSuffix>
+    <PlayerExePublish>$(MSBuildThisFileDirectory)..\PVZP\bin\$(Configuration)\net10.0-windows\$(_PlayerRidSuffix)publish\PVZP.exe</PlayerExePublish>
+    <PlayerExeBuild>$(MSBuildThisFileDirectory)..\PVZP\bin\$(Configuration)\net10.0-windows\$(_PlayerRidSuffix)PVZP.exe</PlayerExeBuild>
+    <PlayerTemplateSource Condition="Exists('$(PlayerExePublish)')">$(PlayerExePublish)</PlayerTemplateSource>
+    <PlayerTemplateSource Condition="'$(PlayerTemplateSource)' == '' and Exists('$(PlayerExeBuild)')">$(PlayerExeBuild)</PlayerTemplateSource>
+  </PropertyGroup>
+
+  <!-- Перед упаковкой single-file bundle публикуем PVZP одним exe и кладём его
+       внутрь PVZT.exe: при запуске шаблон извлекается в %TEMP%\.net\PVZT\…\PlayerTemplate,
+       куда указывает AppContext.BaseDirectory (FindPlayerTemplate его находит). -->
+  <Target Name="BundlePlayerTemplate" BeforeTargets="_ComputeFilesToBundle">
+    <PropertyGroup>
+      <_TemplateRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</_TemplateRid>
+      <_TemplateRid Condition="'$(_TemplateRid)' == '' and '$(PublishRuntimeIdentifier)' != ''">$(PublishRuntimeIdentifier)</_TemplateRid>
+      <_TemplateRid Condition="'$(_TemplateRid)' == ''">win-x64</_TemplateRid>
+      <_PlayerPublishDir>$(MSBuildThisFileDirectory)..\PVZP\bin\$(Configuration)\net10.0-windows\$(_TemplateRid)\publish\</_PlayerPublishDir>
+      <_PlayerTemplateExe>$(_PlayerPublishDir)PVZP.exe</_PlayerTemplateExe>
+    </PropertyGroup>
+    <MSBuild
+      Projects="$(PlayerProject)"
+      Targets="Publish"
+      Properties="Configuration=$(Configuration);RuntimeIdentifier=$(_TemplateRid);SelfContained=true;PublishSingleFile=true;PublishDir=$(_PlayerPublishDir);PublishProfile=" />
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(_PlayerTemplateExe)">
+        <RelativePath>PlayerTemplate\PVZP.exe</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="CopyPlayerTemplate" AfterTargets="Build" Condition="'$(IsPublishing)' != 'true'">
+    <MSBuild
+      Projects="$(PlayerProject)"
+      Targets="Build"
+      Properties="Configuration=$(Configuration);RuntimeIdentifier=$(RuntimeIdentifier)"
+      Condition="'$(PlayerTemplateSource)' == ''" />
+    <PropertyGroup>
+      <_DevPlayerTemplate Condition="Exists('$(PlayerExeBuild)')">$(PlayerExeBuild)</_DevPlayerTemplate>
+      <_DevPlayerTemplate Condition="'$(_DevPlayerTemplate)' == '' and Exists('$(PlayerExePublish)')">$(PlayerExePublish)</_DevPlayerTemplate>
+    </PropertyGroup>
+    <PropertyGroup>
+      <_DevTemplateDestDir>$([MSBuild]::EnsureTrailingSlash('$(OutDir)'))</_DevTemplateDestDir>
+    </PropertyGroup>
+    <MakeDir Directories="$(_DevTemplateDestDir)PlayerTemplate" Condition="'$(_DevPlayerTemplate)' != ''" />
+    <Copy
+      SourceFiles="$(_DevPlayerTemplate)"
+      DestinationFiles="$(_DevTemplateDestDir)PlayerTemplate\PVZP.exe"
+      SkipUnchangedFiles="true"
+      Condition="'$(_DevPlayerTemplate)' != ''" />
+    <Copy
+      SourceFiles="$(MSBuildThisFileDirectory)..\PVZP\bin\$(Configuration)\net10.0-windows\PVZP.dll;$(MSBuildThisFileDirectory)..\PVZP\bin\$(Configuration)\net10.0-windows\PVZ.Core.dll;$(MSBuildThisFileDirectory)..\PVZP\bin\$(Configuration)\net10.0-windows\PVZP.deps.json;$(MSBuildThisFileDirectory)..\PVZP\bin\$(Configuration)\net10.0-windows\PVZP.runtimeconfig.json"
+      DestinationFolder="$(_DevTemplateDestDir)PlayerTemplate"
+      SkipUnchangedFiles="true"
+      Condition="Exists('$(PlayerExeBuild)')" />
+  </Target>
+
+</Project>

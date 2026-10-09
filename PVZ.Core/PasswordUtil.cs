@@ -22,8 +22,21 @@ public static class PasswordUtil
         if (string.IsNullOrEmpty(password) || string.IsNullOrEmpty(hashBase64) || string.IsNullOrEmpty(saltBase64))
             return false;
 
-        var salt = Convert.FromBase64String(saltBase64);
-        var expected = Convert.FromBase64String(hashBase64);
+        byte[] salt;
+        byte[] expected;
+        try
+        {
+            salt = Convert.FromBase64String(saltBase64);
+            expected = Convert.FromBase64String(hashBase64);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        if (salt.Length != 16 || expected.Length != 32)
+            return false;
+
         var actual = Rfc2898DeriveBytes.Pbkdf2(
             Encoding.UTF8.GetBytes(password),
             salt,

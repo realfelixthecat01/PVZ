@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifiers>win-x64;win-x86</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- dotnet publish: один самодостаточный exe сервера (dotnet build остаётся обычным). -->
+    <PublishSelfContained>true</PublishSelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.0" />
+    <ProjectReference Include="..\PVZ.Core\PVZ.Core.csproj" />
+    <!-- Автонаполнение каталога стандартными задачниками (общий код с PVZ.CatalogSeed). -->
+    <ProjectReference Include="..\PVZ.Catalog\PVZ.Catalog.csproj" />
+  </ItemGroup>
+</Project>

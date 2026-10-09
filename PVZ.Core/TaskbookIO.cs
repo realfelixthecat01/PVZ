@@ -20,7 +20,10 @@ public static class TaskbookIO
 
         document.Tasks ??= new();
         foreach (var task in document.Tasks)
+        {
             task.Tests ??= new();
+            task.Blanks ??= new();
+        }
 
         return document;
     }
