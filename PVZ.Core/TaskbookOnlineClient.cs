@@ -6,21 +6,11 @@ namespace PVZ.Core;
 
 public sealed class ServerUnauthorizedException(string message) : InvalidOperationException(message);
 
-public sealed class ServerAddressRequiredException(string message) : InvalidOperationException(message);
-
 public static class TaskbookOnlineClient
 {
-    /// <summary>Постоянный адрес сервера PVZS по умолчанию.</summary>
-    public const string DefaultServerUrl = "https://pvz.k11.by";
+    /// <summary>Постоянный адрес сервера PVZS.</summary>
+    public const string DefaultServerUrl = "https://pvz-server.vercel.app";
 
-    // ВРЕМЕННО: пока ссылку выдаёт программа «Сервер и ссылка», адрес нужно вводить вручную.
-    // Чтобы снова подставлять DefaultServerUrl — удалите это поле и ветку с ним в TryResolveServerUrl().
-    public static readonly bool RequireExplicitServerUrl = true;
-
-    private const string AddressRequiredMessage =
-        "Укажите ссылку на сервер PVZS.\n\n" +
-        "Запустите на компьютере учителя программу «Сервер и ссылка», скопируйте ссылку " +
-        "и вставьте её в поле «Адрес сервера».";
     public const int MaximumPackageBytes = 16 * 1024 * 1024;
     public const int MaximumExchangeFileBytes = 32 * 1024 * 1024;
     private static readonly TimeSpan ExchangeUploadTimeout = TimeSpan.FromMinutes(5);
@@ -36,20 +26,13 @@ public static class TaskbookOnlineClient
         return Task.FromResult(ResolveServerUrl());
     }
 
-    /// <summary>Адрес сервера: PVZ_SERVER_URL → сохранённый в UI адрес → адрес по умолчанию.</summary>
-    public static string ResolveServerUrl() =>
-        TryResolveServerUrl() ?? throw new ServerAddressRequiredException(AddressRequiredMessage);
-
-    /// <summary>Текущий адрес сервера или null, если он ещё не задан и подстановка отключена.</summary>
-    public static string? TryResolveServerUrl()
+    /// <summary>Адрес сервера: переменная PVZ_SERVER_URL (для разработки) или постоянный адрес.</summary>
+    public static string ResolveServerUrl()
     {
         var configured = Environment.GetEnvironmentVariable("PVZ_SERVER_URL");
-        if (!string.IsNullOrWhiteSpace(configured))
-            return NormalizeServerUrl(configured);
-        var stored = ServerAddressStore.Load();
-        if (!string.IsNullOrWhiteSpace(stored))
-            return NormalizeServerUrl(stored);
-        return RequireExplicitServerUrl ? null : NormalizeServerUrl(DefaultServerUrl);
+        return string.IsNullOrWhiteSpace(configured)
+            ? NormalizeServerUrl(DefaultServerUrl)
+            : NormalizeServerUrl(configured);
     }
 
     public static async Task<IReadOnlyList<TaskbookCatalogItemDto>> ListCatalogTaskbooksAsync(
@@ -202,22 +185,24 @@ public static class TaskbookOnlineClient
 
         return await WithTransportErrorsAsync(serverUrl, cancellationToken, async () =>
         {
-            using var client = CreateClient(serverUrl);
+            using var client = CreateClient(serverUrl, ExchangeUploadTimeout);
             await using var package = File.OpenRead(packagePath);
             if (package.Length <= 0 || package.Length > MaximumPackageBytes)
                 throw new InvalidDataException("Размер .pvz файла недопустим.");
 
             var planParameter = plan == StoragePlan.PaidOneMonth ? "paid-month" : "free-weeks";
-            using var request = new HttpRequestMessage(HttpMethod.Post, $"api/teacher/sessions?plan={planParameter}");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            request.Content = new StreamContent(package);
-            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-            if (!response.IsSuccessStatusCode)
-                throw await CreateServerExceptionAsync(response, cancellationToken);
-
-            return await response.Content.ReadFromJsonAsync<TeacherSessionUploadReceipt>(JsonOptions, cancellationToken)
-                ?? throw new InvalidDataException("Сервер вернул пустой результат загрузки.");
+            var begin = await BeginUploadAsync(
+                client,
+                accessToken,
+                new UploadBeginRequest { Target = "teacher-session", Size = package.Length, Plan = planParameter },
+                cancellationToken);
+            await PutUploadAsync(client, begin, package, cancellationToken);
+            var complete = await CompleteUploadAsync<SessionUploadComplete>(
+                client,
+                accessToken,
+                begin.UploadId,
+                cancellationToken);
+            return complete.Receipt;
         });
     }
 
@@ -355,6 +340,74 @@ public static class TaskbookOnlineClient
         });
     }
 
+    /// <summary>Ученик спрашивает, смотрят ли его экран сейчас.</summary>
+    public static async Task<bool> CheckScreenWatchAsync(
+        string studentSessionId,
+        string serverUrl,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(studentSessionId);
+
+        return await WithTransportErrorsAsync(serverUrl, cancellationToken, async () =>
+        {
+            using var client = CreateClient(serverUrl);
+            using var response = await client.GetAsync(
+                $"api/student/sessions/{Uri.EscapeDataString(studentSessionId)}/watch",
+                cancellationToken);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                return false;
+            if (!response.IsSuccessStatusCode)
+                throw await CreateServerExceptionAsync(response, cancellationToken);
+            var state = await response.Content.ReadFromJsonAsync<ScreenWatchStateDto>(JsonOptions, cancellationToken);
+            return state?.Watching ?? false;
+        });
+    }
+
+    /// <summary>Ученик отправляет кадр экрана; возвращает, продолжается ли просмотр.</summary>
+    public static async Task<bool> SendScreenFrameAsync(
+        string studentSessionId,
+        byte[] jpeg,
+        string serverUrl,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(studentSessionId);
+        ArgumentNullException.ThrowIfNull(jpeg);
+
+        return await WithTransportErrorsAsync(serverUrl, cancellationToken, async () =>
+        {
+            using var client = CreateClient(serverUrl);
+            using var content = new ByteArrayContent(jpeg);
+            content.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
+            using var response = await client.PostAsync(
+                $"api/student/sessions/{Uri.EscapeDataString(studentSessionId)}/screen",
+                content,
+                cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                throw await CreateServerExceptionAsync(response, cancellationToken);
+            var state = await response.Content.ReadFromJsonAsync<ScreenWatchStateDto>(JsonOptions, cancellationToken);
+            return state?.Watching ?? false;
+        });
+    }
+
+    /// <summary>Ученик нажал «Стоп» — сообщаем серверу прекратить просмотр.</summary>
+    public static async Task StopScreenShareAsync(
+        string studentSessionId,
+        string serverUrl,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(studentSessionId);
+
+        await WithTransportErrorsAsync(serverUrl, cancellationToken, async () =>
+        {
+            using var client = CreateClient(serverUrl);
+            using var response = await client.DeleteAsync(
+                $"api/student/sessions/{Uri.EscapeDataString(studentSessionId)}/screen",
+                cancellationToken);
+            if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
+                throw await CreateServerExceptionAsync(response, cancellationToken);
+        });
+    }
+
     public static async Task<TaskbookDocument> DownloadAsync(
         string token,
         string serverUrl,
@@ -439,11 +492,13 @@ public static class TaskbookOnlineClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(studentSessionId);
-        return await UploadExchangeFileAsync<ExchangeFileDto>(
-            $"api/student/sessions/{Uri.EscapeDataString(studentSessionId)}/files",
+        return await UploadExchangeFileAsync(
+            "student-work",
             filePath,
             accessToken: null,
             serverUrl,
+            sessionId: null,
+            studentSessionId,
             cancellationToken);
     }
 
@@ -485,11 +540,13 @@ public static class TaskbookOnlineClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
-        return await UploadExchangeFileAsync<ExchangeFileDto>(
-            $"api/teacher/sessions/{Uri.EscapeDataString(sessionId)}/files",
+        return await UploadExchangeFileAsync(
+            "teacher-material",
             filePath,
             accessToken,
             serverUrl,
+            sessionId,
+            studentSessionId: null,
             cancellationToken);
     }
 
@@ -543,11 +600,32 @@ public static class TaskbookOnlineClient
         });
     }
 
-    private static async Task<T> UploadExchangeFileAsync<T>(
-        string relativeUrl,
+    private sealed class UploadBeginRequest
+    {
+        public required string Target { get; init; }
+        public long Size { get; init; }
+        public string? Plan { get; init; }
+        public string? Name { get; init; }
+        public string? SessionId { get; init; }
+        public string? StudentSessionId { get; init; }
+    }
+
+    private sealed record UploadBeginReceipt(
+        string UploadId,
+        string UploadUrl,
+        Dictionary<string, string>? Headers);
+
+    private sealed record SessionUploadComplete(string Kind, TeacherSessionUploadReceipt Receipt);
+
+    private sealed record FileUploadComplete(string Kind, ExchangeFileDto Info);
+
+    private static async Task<ExchangeFileDto> UploadExchangeFileAsync(
+        string target,
         string filePath,
         string? accessToken,
         string serverUrl,
+        string? sessionId,
+        string? studentSessionId,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
@@ -559,19 +637,90 @@ public static class TaskbookOnlineClient
             if (stream.Length <= 0 || stream.Length > MaximumExchangeFileBytes)
                 throw new InvalidDataException("Размер файла должен быть от 1 байта до 32 МиБ.");
 
-            using var content = new MultipartFormDataContent();
-            using var fileContent = new StreamContent(stream);
-            fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-            content.Add(fileContent, "file", Path.GetFileName(filePath));
-            using var request = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = content };
-            if (!string.IsNullOrWhiteSpace(accessToken))
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            using var response = await client.SendAsync(request, cancellationToken);
-            if (!response.IsSuccessStatusCode)
-                throw await CreateServerExceptionAsync(response, cancellationToken);
-            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken)
-                ?? throw new InvalidDataException("Сервер не вернул описание файла.");
+            var begin = await BeginUploadAsync(
+                client,
+                accessToken,
+                new UploadBeginRequest
+                {
+                    Target = target,
+                    Size = stream.Length,
+                    Name = Path.GetFileName(filePath),
+                    SessionId = sessionId,
+                    StudentSessionId = studentSessionId,
+                },
+                cancellationToken);
+            await PutUploadAsync(client, begin, stream, cancellationToken);
+            var complete = await CompleteUploadAsync<FileUploadComplete>(
+                client,
+                accessToken,
+                begin.UploadId,
+                cancellationToken);
+            return complete.Info;
         });
+    }
+
+    /// <summary>Сервер выдаёт адрес и заголовки для прямой загрузки файла (на Vercel — в Blob).</summary>
+    private static async Task<UploadBeginReceipt> BeginUploadAsync(
+        HttpClient client,
+        string? accessToken,
+        UploadBeginRequest requestBody,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "api/upload/begin")
+        {
+            Content = JsonContent.Create(requestBody, options: JsonOptions),
+        };
+        if (!string.IsNullOrWhiteSpace(accessToken))
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var response = await client.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateServerExceptionAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<UploadBeginReceipt>(JsonOptions, cancellationToken)
+            ?? throw new InvalidDataException("Сервер не подготовил загрузку файла.");
+    }
+
+    private static async Task PutUploadAsync(
+        HttpClient client,
+        UploadBeginReceipt begin,
+        Stream content,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Put, new Uri(begin.UploadUrl, UriKind.RelativeOrAbsolute));
+        foreach (var header in begin.Headers ?? [])
+        {
+            if (string.Equals(header.Key, "content-type", StringComparison.OrdinalIgnoreCase))
+                continue;
+            request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
+
+        request.Content = new StreamContent(content);
+        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var details = await response.Content.ReadAsStringAsync(cancellationToken);
+            var hint = string.IsNullOrWhiteSpace(details) ? "" : $" {details}";
+            throw new InvalidOperationException($"Не удалось загрузить файл на сервер ({(int)response.StatusCode}).{hint}".Trim());
+        }
+    }
+
+    private static async Task<T> CompleteUploadAsync<T>(
+        HttpClient client,
+        string? accessToken,
+        string uploadId,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "api/upload/complete")
+        {
+            Content = JsonContent.Create(new { uploadId }, options: JsonOptions),
+        };
+        if (!string.IsNullOrWhiteSpace(accessToken))
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var response = await client.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateServerExceptionAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken)
+            ?? throw new InvalidDataException("Сервер не подтвердил загрузку файла.");
     }
 
     public static string NormalizeServerUrl(string value)

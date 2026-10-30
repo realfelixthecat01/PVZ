@@ -1,0 +1,17 @@
+{
+  "name": "pvz-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PVZS на Node.js: задачники, онлайн-сессии, аккаунты и сайт. Локально — Express, на Vercel — серверная функция с Redis (state) и Blob (файлы).",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node scripts/seed.mjs"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.8.2",
+    "express": "^4.21.2",
+    "redis": "^4.7.0"
+  }
+}

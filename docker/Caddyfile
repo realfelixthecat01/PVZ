@@ -1,4 +1,0 @@
-pvz.k11.by {
-	encode zstd gzip
-	reverse_proxy pvzs:1729
-}

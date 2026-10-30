@@ -2,7 +2,6 @@
   <Project Path="PVZT/PVZT.csproj" />
   <Project Path="PVZ.Core/PVZ.Core.csproj" />
   <Project Path="PVZP/PVZP.csproj" />
-  <Project Path="PVZS/PVZS.csproj" />
   <Project Path="PVZS.Tests/PVZS.Tests.csproj" />
   <Project Path="PVZ.CatalogSeed/PVZ.CatalogSeed.csproj" />
 </Solution>

@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<title>Личный кабинет — Пункт Выдачи Задачек</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<style>
+  :root {
+    --canvas: #0d111b;
+    --surface: #151b2a;
+    --elevated: #1e2638;
+    --border: #37415f;
+    --ink: #e2e8f0;
+    --muted: #94a3b8;
+    --subtle: #64748b;
+    --accent: #6366f1;
+    --accent-strong: #818cf8;
+    --success: #22c55e;
+    --warning: #eab308;
+    --danger: #ef4444;
+    --radius: 14px;
+    --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
+    background: radial-gradient(1200px 600px at 15% -10%, #1e2a4a 0%, transparent 60%),
+                radial-gradient(900px 500px at 100% 0%, #2a1e4a 0%, transparent 55%),
+                var(--canvas);
+    color: var(--ink); min-height: 100vh;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent-strong); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  nav.top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 24px; max-width: 1100px; margin: 0 auto; gap: 14px;
+  }
+  nav.top .brand {
+    display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--ink);
+  }
+  nav.top .brand .dot {
+    width: 10px; height: 10px; border-radius: 3px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+    box-shadow: 0 0 20px rgba(129, 140, 248, .6);
+  }
+  nav.top .nav-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: flex-end; }
+  nav.top .links { display: flex; gap: 18px; font-size: 14px; }
+  nav.top .links a { color: var(--muted); }
+  nav.top .links a:hover { color: var(--ink); text-decoration: none; }
+  .switchers { display: inline-flex; gap: 6px; }
+  .switch-group {
+    display: inline-flex; border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden; background: rgba(13, 17, 27, .6);
+  }
+  .switch-group button {
+    background: transparent; border: 0; color: var(--muted);
+    font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .03em;
+    padding: 5px 9px; cursor: pointer; transition: background .15s ease, color .15s ease;
+  }
+  .switch-group button.active { background: var(--accent); color: #fff; }
+  .switch-group button:not(.active):hover { color: var(--ink); }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 10px 18px; border-radius: 10px; border: 1px solid transparent;
+    font: inherit; font-weight: 600; font-size: 14px;
+    cursor: pointer; transition: all .15s ease;
+  }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); text-decoration: none; }
+  .btn.secondary { background: var(--elevated); color: var(--ink); border-color: var(--border); }
+  .btn.secondary:hover { background: #2a3450; text-decoration: none; }
+  .btn.danger { background: transparent; color: #fca5a5; border-color: rgba(239, 68, 68, .4); }
+  .btn.danger:hover { background: rgba(239, 68, 68, .1); text-decoration: none; }
+  .btn.small { padding: 6px 12px; font-size: 12.5px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .badge {
+    display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; letter-spacing: .2px;
+  }
+  .badge.accent { background: rgba(99, 102, 241, .15); color: var(--accent-strong); border: 1px solid rgba(99, 102, 241, .35); }
+  .badge.gold { background: rgba(234, 179, 8, .13); color: #fde047; border: 1px solid rgba(234, 179, 8, .35); }
+  .badge.success { background: rgba(34, 197, 94, .13); color: #86efac; border: 1px solid rgba(34, 197, 94, .35); }
+  .badge.muted { background: rgba(148, 163, 184, .12); color: var(--muted); border: 1px solid rgba(148, 163, 184, .3); }
+  .card {
+    background: linear-gradient(180deg, rgba(30, 38, 56, .9), rgba(21, 27, 42, .9));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  h1, h2, h3 { color: var(--ink); margin: 0 0 12px; font-weight: 700; }
+  h1 { font-size: 44px; letter-spacing: -.02em; }
+  h2 { font-size: 28px; letter-spacing: -.01em; }
+  h3 { font-size: 18px; }
+  p { color: var(--muted); margin: 0 0 12px; }
+  .muted { color: var(--muted); }
+  .label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  .input {
+    width: 100%; font: inherit; font-size: 15px; padding: 11px 14px;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: rgba(13, 17, 27, .7); color: var(--ink); outline: none;
+    transition: border-color .15s ease;
+  }
+  .input:focus { border-color: var(--accent); }
+  select.input { appearance: none; cursor: pointer; }
+  .form-error { color: #fca5a5; font-size: 13px; margin-top: 12px; min-height: 18px; }
+  .form-ok { color: #86efac; font-size: 13px; margin-top: 12px; min-height: 18px; }
+  .timer { font-variant-numeric: tabular-nums; }
+  .reveal { opacity: 0; transform: translateY(16px); transition: opacity .55s ease, transform .55s ease; }
+  .reveal.visible { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+    * { animation: none !important; }
+  }
+  [hidden] { display: none !important; }
+  footer.site {
+    text-align: center; color: var(--subtle); font-size: 13px;
+    padding: 40px 20px 30px; margin-top: 60px;
+  }
+  footer.site a { color: var(--muted); }
+  @media (max-width: 640px) {
+    nav.top { flex-wrap: wrap; }
+    nav.top .nav-right { width: 100%; justify-content: space-between; }
+  }
+</style>
+<style>
+  .cabinet-head {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; padding: 32px 0 6px;
+  }
+  .cabinet-head h1 { font-size: 30px; margin-bottom: 6px; }
+  .cabinet-head .lead { margin: 0; font-size: 14.5px; }
+  .head-side { display: flex; align-items: center; gap: 12px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+  .col { display: grid; gap: 18px; align-content: start; }
+  .panel { padding: 22px 22px 20px; }
+  .panel h2 { font-size: 19px; margin-bottom: 10px; }
+  .panel .btn { margin-top: 12px; }
+  .who { margin-bottom: 8px; }
+  .who .name { display: block; font-weight: 700; }
+  .who .line { display: block; color: var(--muted); font-size: 13.5px; }
+  .plan-line { min-height: 0; }
+  .plan-line .line { display: block; color: var(--muted); font-size: 13.5px; margin-bottom: 8px; }
+  .buckets, .subs { display: grid; gap: 8px; }
+  .bucket, .sub {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+    background: rgba(13, 17, 27, .5); font-size: 14px;
+  }
+  .keycode-input { font-family: Consolas, monospace; letter-spacing: .06em; text-transform: uppercase; }
+  .upload-grid { display: grid; grid-template-columns: 2fr 1.4fr auto; gap: 12px; align-items: end; }
+  .upload-grid .label { margin-top: 0; }
+  input[type=file].input { padding: 8px 12px; }
+  input[type=file].input::file-selector-button {
+    font: inherit; font-size: 13px; margin-right: 10px; padding: 4px 10px;
+    border-radius: 8px; border: 1px solid var(--border);
+    background: var(--elevated); color: var(--ink); cursor: pointer;
+  }
+  .file-row {
+    display: grid; grid-template-columns: 1.2fr 1.8fr auto; gap: 14px;
+    align-items: center; padding: 12px 2px; border-bottom: 1px solid rgba(55, 65, 95, .55);
+  }
+  .file-row:last-child { border-bottom: 0; }
+  .token-chip { font-family: Consolas, monospace; font-weight: 700; letter-spacing: .05em; }
+  .file-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 13px; }
+  .file-meta b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .file-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .empty { color: var(--muted); padding: 16px 2px; }
+  .guest-card { max-width: 540px; margin: 50px auto; padding: 32px; text-align: center; }
+  .guest-card h1 { font-size: 28px; }
+  .guest-card .ctas { display: flex; gap: 10px; justify-content: center; margin-top: 18px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 760px) {
+    .upload-grid { grid-template-columns: 1fr; }
+    .file-row { grid-template-columns: 1fr; }
+    .file-actions { justify-content: flex-start; }
+  }
+</style>
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="/"><span class="dot"></span>Пункт Выдачи Задачек</a>
+  <div class="nav-right">
+    <div class="links">
+      <a href="/" data-i18n="nav.home">Главная</a>
+      <a href="/pricing" data-i18n="nav.pricing">Тарифы</a>
+      <a href="/admin" data-i18n="nav.admin">Панель учителя</a>
+      <a href="/cabinet" data-i18n="nav.cabinet">Кабинет</a>
+    </div>
+    <div class="switchers">
+      <div class="switch-group" role="group" aria-label="Язык">
+        <button type="button" data-lang="ru" class="active">RU</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <div class="switch-group" role="group" aria-label="Валюта">
+        <button type="button" data-currency="USD" class="active">USD</button>
+        <button type="button" data-currency="BYN">BYN</button>
+        <button type="button" data-currency="RUB">RUB</button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<section class="wrap" id="guestView">
+  <div class="card guest-card reveal">
+    <h1 data-i18n="cabinet.guest.title">Войдите в кабинет</h1>
+    <p data-i18n="cabinet.guest.desc">Кабинет хранит задачники в облаке и активирует ключи. Войдите или зарегистрируйтесь.</p>
+    <div class="ctas">
+      <a class="btn primary" href="/login" data-i18n="cabinet.guest.login">Войти</a>
+      <a class="btn secondary" href="/register" data-i18n="cabinet.guest.reg">Регистрация</a>
+    </div>
+  </div>
+</section>
+
+<section class="wrap" id="cabinetView" hidden>
+  <header class="cabinet-head reveal">
+    <div>
+      <h1 data-i18n="cabinet.title">Личный кабинет</h1>
+      <p class="lead" data-i18n="cabinet.lead">Профиль, тарифы и файлы в облаке с таймером удаления.</p>
+    </div>
+    <div class="head-side">
+      <span class="badge accent" id="planBadge">…</span>
+      <button class="btn secondary small" id="logoutBtn" data-i18n="auth.logout">Выйти</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="col">
+      <div class="card panel reveal">
+        <h2 data-i18n="cabinet.profile">Профиль</h2>
+        <div class="who" id="who"></div>
+        <label class="label" for="fullName" data-i18n="auth.name">ФИО</label>
+        <input class="input" id="fullName" type="text" maxlength="120" autocomplete="name">
+        <label class="label" for="school" data-i18n="auth.school">Школа или гимназия</label>
+        <input class="input" id="school" type="text" maxlength="160" autocomplete="organization">
+        <div class="form-ok" id="profileOk"></div>
+        <div class="form-error" id="profileError"></div>
+        <button class="btn primary" id="saveProfileBtn" data-i18n="cabinet.profile.save">Сохранить</button>
+      </div>
+
+      <div class="card panel reveal">
+        <h2 data-i18n="cabinet.pwd">Смена пароля</h2>
+        <label class="label" for="currentPassword" data-i18n="cabinet.pwd.current">Текущий пароль</label>
+        <input class="input" id="currentPassword" type="password" autocomplete="current-password">
+        <label class="label" for="newPassword" data-i18n="cabinet.pwd.new">Новый пароль</label>
+        <input class="input" id="newPassword" type="password" autocomplete="new-password">
+        <div class="form-ok" id="pwdOk"></div>
+        <div class="form-error" id="pwdError"></div>
+        <button class="btn secondary" id="savePwdBtn" data-i18n="cabinet.pwd.save">Обновить пароль</button>
+      </div>
+
+      <div class="card panel reveal">
+        <h2 data-i18n="cabinet.key">Ключ активации</h2>
+        <input class="input keycode-input" id="keyCode" type="text" placeholder="PVZ-XXXX-XXXX-XXXX" data-i18n-ph="cabinet.key.ph" spellcheck="false" autocomplete="off">
+        <div class="form-ok" id="keyOk"></div>
+        <div class="form-error" id="keyError"></div>
+        <button class="btn primary" id="activateBtn" data-i18n="cabinet.key.btn">Активировать</button>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card panel reveal">
+        <h2 data-i18n="cabinet.storage">Хранилище</h2>
+        <div class="plan-line" id="planLine"></div>
+        <div class="buckets" id="buckets"></div>
+      </div>
+
+      <div class="card panel reveal">
+        <h2 data-i18n="cabinet.subs">Подписки на каталог</h2>
+        <div class="subs" id="subs"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card panel reveal" style="margin-top: 18px;">
+    <h2 data-i18n="cabinet.upload">Загрузить задачник</h2>
+    <div class="upload-grid">
+      <div>
+        <label class="label" for="uploadFile">.pvz</label>
+        <input class="input" id="uploadFile" type="file" accept=".pvz,application/octet-stream">
+      </div>
+      <div>
+        <label class="label" for="uploadRetention" data-i18n="cabinet.upload.term">Срок хранения</label>
+        <select class="input" id="uploadRetention"></select>
+      </div>
+      <button class="btn primary" id="uploadBtn" data-i18n="cabinet.upload.btn">Загрузить в облако</button>
+    </div>
+    <div class="form-ok" id="uploadOk"></div>
+    <div class="form-error" id="uploadError"></div>
+  </div>
+
+  <div class="card panel reveal" style="margin-top: 18px;">
+    <h2 data-i18n="cabinet.files">Файлы в облаке</h2>
+    <div id="files"></div>
+    <div class="form-error" id="filesError"></div>
+  </div>
+</section>
+
+<footer class="site">
+  <span data-i18n="foot.line">© Пункт Выдачи Задачек — задачник, который приходит и уходит сам.</span><br>
+  <a href="/pricing" data-i18n="foot.pricing">Тарифы</a> ·
+  <a href="/admin" data-i18n="foot.admin">Панель учителя</a> ·
+  <a href="/cabinet" data-i18n="nav.cabinet">Кабинет</a>
+</footer>
+<script>
+(() => {
+  const DICT = {
+    ru: {
+      'nav.home': 'Главная',
+      'nav.pricing': 'Тарифы',
+      'nav.admin': 'Панель учителя',
+      'nav.cabinet': 'Кабинет',
+      'foot.line': '© Пункт Выдачи Задачек — задачник, который приходит и уходит сам.',
+      'foot.pricing': 'Тарифы',
+      'foot.admin': 'Панель учителя',
+      'unit.month': '/мес',
+      'unit.h': 'ч',
+      'unit.min': 'мин',
+      'unit.d': 'д',
+      'unit.lessMin': 'меньше минуты',
+      'retention.hours48': '48 часов',
+      'retention.week1': '1 неделя',
+      'retention.month1': '1 месяц',
+      'retention.year1': '1 год',
+      'retention.forever': 'навсегда',
+      'retention.twoWeeks': '2 недели',
+      'subject.informatics': 'Информатика',
+      'subject.english': 'Английский язык',
+      'subject.math': 'Математика',
+      'plan.free': 'Бесплатный',
+      'plan.pro': 'Про',
+      'plan.plus': 'Про+',
+      'plan.until': 'активен до',
+      'err.network': 'Сервер не отвечает. Проверьте интернет.',
+      'err.http': 'Ошибка сервера',
+      'err.required': 'Заполните все поля.',
+      'landing.hero.badge': 'Школа · Информатика · Математика · Английский',
+      'landing.hero.title': 'Задачник, который приходит и уходит сам.',
+      'landing.hero.lead': 'Учитель собирает задачник, выдаёт шестисимвольный токен ученикам и видит прогресс в реальном времени. Бесплатно — до 5 задачников на 48 часов: сервер удаляет их сам.',
+      'landing.hero.cta1': 'Открыть панель учителя',
+      'landing.hero.cta2': 'Посмотреть тарифы',
+      'landing.p1.role': '— учитель',
+      'landing.p1.desc': 'Редактор задачников с тестами, выгрузкой в exe, загрузкой в облако и живой доской результатов.',
+      'landing.p1.li1': 'Собирает оффлайн .pvz и самодостаточный exe',
+      'landing.p1.li2': 'Загружает задачник в облако одним кликом',
+      'landing.p1.li3': 'Видит прогресс каждого ученика в реальном времени',
+      'landing.p2.role': '— ученик',
+      'landing.p2.desc': 'Один exe, никакого Python и Pascal устанавливать не надо. Открывает оффлайн или по токену.',
+      'landing.p2.li1': 'Запускает Python и Pascal ABC через встроенные раннеры',
+      'landing.p2.li2': 'Шлёт прогресс учителю, пока задачник открыт',
+      'landing.p2.li3': 'Тёмная тема и подсказки, которые не бесят',
+      'landing.p3.desc': 'Сервер, который хранит задачник ровно столько, сколько выбрал учитель. Потом автоматически удаляет.',
+      'landing.p3.li1': 'Токены из 6 символов, пароль учителя проверяет сервер',
+      'landing.p3.li2': 'Аккаунты, ключи активации и каталог хранятся в облаке',
+      'landing.p3.li3': 'HTTPS и ограничение частоты запросов из коробки',
+      'landing.tiers.badge': 'Тарифы хранения',
+      'landing.tiers.title': 'Храните задачник столько, сколько нужно.',
+      'landing.tiers.lead': 'Тариф включается ключом активации в личном кабинете — без автосписаний и привязки карты.',
+      'landing.tiers.free.desc': 'До 5 задачников одновременно. Каждый файл живёт 48 часов, потом сервер удаляет его сам.',
+      'landing.tiers.pro.desc': '20 задачников на 48 часов, 15 на неделю, 5 на месяц и 1 на год. Срок выбирается при загрузке.',
+      'landing.tiers.plus.desc': '48 часов, неделя и месяц без лимитов, 100 файлов на год и 20 задачников навсегда.',
+      'landing.tiers.cta': 'Все тарифы',
+      'landing.store.badge': 'Каталог задачников',
+      'landing.store.title': 'Готовые задачники от других учителей.',
+      'landing.store.desc': 'Выкладывайте свои задачники и забирайте чужие по подписке: на один класс, на предмет или на весь каталог.',
+      'landing.store.sub.a': 'Подписка на предмет —',
+      'landing.store.sub.b': 'на класс —',
+      'landing.store.sub.c': 'все предметы —',
+      'landing.store.gated': 'по подписке',
+      'landing.shelf1': 'Информатика · 7 класс',
+      'landing.shelf1.sub': 'Циклы и условия · 12 задач',
+      'landing.shelf2': 'Математика · 5 класс',
+      'landing.shelf2.sub': 'Дроби · 10 задач',
+      'landing.shelf3': 'Английский · 4 класс',
+      'landing.shelf3.sub': 'Present Simple · 8 задач',
+      'landing.shelf4': 'Информатика · 10 класс',
+      'landing.shelf4.sub': 'ЕГЭ · задача 24',
+      'downloads.badge': 'Скачать приложения',
+      'downloads.title': 'Клиенты для учителя и ученика',
+      'downloads.lead': 'Сборки для Windows 10/11 (64 бита). Установка не нужна — просто запустите файл.',
+      'downloads.download': 'Скачать',
+      'downloads.soon': 'Скоро',
+      'downloads.none': 'Сборки пока не выложены.',
+      'downloads.pvzt.desc': 'Редактор задачников: тесты, выгрузка в exe, загрузка в облако и живая доска результатов.',
+      'downloads.pvzp.desc': 'Клиент ученика: открывает задачник оффлайн или по токену и шлёт прогресс учителю.',
+      'pricing.hero.badge': 'Ключ активации · без автосписаний',
+      'pricing.hero.title': 'Просто: храните свои задачники и скачивайте готовые.',
+      'pricing.hero.lead': 'Есть два вида ключей. Ключ хранения — сколько ваших задачников лежит в облаке и как долго. Ключ каталога — доступ к готовым задачникам. Оба вводятся в личном кабинете.',
+      'pricing.free.tag': 'чтобы попробовать',
+      'pricing.free.li1': 'До 5 своих задачников',
+      'pricing.free.li2': 'Каждый хранится 48 часов, потом удаляется',
+      'pricing.free.li3': 'Живая доска результатов класса',
+      'pricing.free.li4': 'Заводить учеников не нужно',
+      'pricing.pro.tag': 'на четверть',
+      'pricing.pro.li1': '20 задачников на 48 часов',
+      'pricing.pro.li2': '15 — на неделю',
+      'pricing.pro.li3': '5 — на месяц',
+      'pricing.pro.li4': '1 — на год',
+      'pricing.plus.tag': 'для больших потоков',
+      'pricing.plus.li1': '48 часов — без лимита',
+      'pricing.plus.li2': 'Неделя — без лимита',
+      'pricing.plus.li3': 'Месяц — без лимита',
+      'pricing.plus.li4': '100 задачников на год',
+      'pricing.plus.li5': '20 задачников навсегда',
+      'pricing.plan.keynote': 'Ключ выдаёт администратор школы',
+      'pricing.plan.freebtn': 'Начать бесплатно',
+      'pricing.plan.activate': 'Ввести ключ',
+      'pricing.sub.title': 'Подписка на каталог',
+      'pricing.sub.lead': 'Открывает скачивание готовых задачников. Ключ действует 30 дней.',
+      'pricing.sub.subject.name': 'Один предмет',
+      'pricing.sub.subject.desc': 'Все классы выбранного предмета.',
+      'pricing.sub.class.name': 'Один класс',
+      'pricing.sub.class.desc': 'Один предмет и один класс.',
+      'pricing.sub.all.name': 'Все предметы',
+      'pricing.sub.all.desc': 'Весь каталог: все предметы и классы.',
+      'pricing.sub.best': 'выгоднее всего',
+      'pricing.table.title': 'Сколько задачников помещается',
+      'pricing.table.lead': 'Лимит своих задачников на каждом сроке хранения.',
+      'pricing.table.term': 'Срок хранения',
+      'pricing.table.hours': '48 часов',
+      'pricing.table.week': '1 неделя',
+      'pricing.table.month': '1 месяц',
+      'pricing.table.year': '1 год',
+      'pricing.table.forever': 'Навсегда',
+      'pricing.table.unlimited': 'без лимита',
+      'pricing.how.title': 'Как это работает',
+      'pricing.how.s1': 'Получите ключ у администратора школы.',
+      'pricing.how.s2': 'Введите ключ в личном кабинете.',
+      'pricing.how.s3': 'Тариф включится сразу.',
+      'pricing.faq.title': 'Вопросы и ответы',
+      'pricing.faq.q1': 'Нужно ли заводить учеников?',
+      'pricing.faq.a1': 'Нет. Ученик просто вводит имя, фамилию и класс.',
+      'pricing.faq.q2': 'Что будет с файлом через 48 часов?',
+      'pricing.faq.a2': 'На бесплатном тарифе сервер удалит его сам. Загрузите снова или включите «Про».',
+      'pricing.faq.q3': 'Как оплатить?',
+      'pricing.faq.a3': 'Оплата не на сервере: администратор выдаёт ключ, вы вводите его в кабинете. Автосписаний нет.',
+      'pricing.faq.q4': 'А если на уроке нет интернета?',
+      'pricing.faq.a4': 'Откройте задачник файлом .pvz — прогресс сохранится и уйдёт на сервер, когда сеть вернётся.',
+      'pricing.note': 'Цены в долларах; BYN и RUB — по курсу сервера.',
+      'auth.login.title': 'Вход для учителя',
+      'auth.login.lead': 'Вход по имени аккаунта и паролю. Кабинет хранит задачники в облаке и включает тарифы по ключам активации.',
+      'auth.login.btn': 'Войти',
+      'auth.login.no': 'Нет аккаунта?',
+      'auth.login.reg': 'Зарегистрироваться',
+      'auth.login.ph': 'masha.ivanova или teacher@school.by',
+      'auth.reg.title': 'Регистрация учителя',
+      'auth.reg.lead': 'Имя аккаунта, ФИО, школа и email — этого достаточно, чтобы получить личный кабинет.',
+      'auth.reg.btn': 'Создать аккаунт',
+      'auth.reg.have': 'Уже есть аккаунт?',
+      'auth.reg.login': 'Войти',
+      'auth.name': 'ФИО',
+      'auth.name.ph': 'Иванова Мария Петровна',
+      'auth.username': 'Имя аккаунта',
+      'auth.username.ph': 'masha.ivanova',
+      'auth.username.hint': 'Латинские буквы, цифры, точка, дефис или подчёркивание — от 3 до 32 символов.',
+      'auth.school': 'Школа или гимназия',
+      'auth.school.ph': 'Гимназия №1, Минск',
+      'auth.email': 'Email',
+      'auth.email.ph': 'teacher@school.by',
+      'auth.password': 'Пароль',
+      'auth.password.ph': 'Минимум 6 символов',
+      'auth.logout': 'Выйти',
+      'auth.err.login': 'Неверное имя аккаунта или пароль.',
+      'auth.err.throttle': 'Слишком много попыток. Подождите минуту.',
+      'cabinet.title': 'Личный кабинет',
+      'cabinet.lead': 'Профиль, тарифы и файлы в облаке с таймером удаления.',
+      'cabinet.guest.title': 'Войдите в кабинет',
+      'cabinet.guest.desc': 'Кабинет хранит задачники в облаке и активирует ключи. Войдите или зарегистрируйтесь.',
+      'cabinet.guest.login': 'Войти',
+      'cabinet.guest.reg': 'Регистрация',
+      'cabinet.profile': 'Профиль',
+      'cabinet.username': 'Имя аккаунта',
+      'cabinet.profile.save': 'Сохранить',
+      'cabinet.profile.saved': 'Профиль обновлён.',
+      'cabinet.pwd': 'Смена пароля',
+      'cabinet.pwd.current': 'Текущий пароль',
+      'cabinet.pwd.new': 'Новый пароль',
+      'cabinet.pwd.save': 'Обновить пароль',
+      'cabinet.pwd.saved': 'Пароль обновлён.',
+      'cabinet.plan': 'Тариф',
+      'cabinet.subs': 'Подписки на каталог',
+      'cabinet.subs.none': 'Подписок нет. Активируйте ключ на предмет или класс.',
+      'cabinet.sub.subject': 'Предмет',
+      'cabinet.sub.class': 'Класс',
+      'cabinet.sub.allSubjects': 'Все предметы',
+      'cabinet.sub.allClasses': 'все классы',
+      'cabinet.sub.until': 'до',
+      'cabinet.storage': 'Хранилище',
+      'cabinet.storage.used': 'занято',
+      'cabinet.storage.unlimited': 'без лимита',
+      'cabinet.key': 'Ключ активации',
+      'cabinet.key.ph': 'PVZ-XXXX-XXXX-XXXX',
+      'cabinet.key.btn': 'Активировать',
+      'cabinet.files': 'Файлы в облаке',
+      'cabinet.files.none': 'Файлов пока нет. Загрузите .pvz из PVZT или через форму ниже.',
+      'cabinet.files.uploaded': 'Загружен',
+      'cabinet.files.expires': 'Удаление через',
+      'cabinet.files.tasks': 'Задач',
+      'cabinet.files.students': 'Учеников',
+      'cabinet.files.download': 'Скачать',
+      'cabinet.files.delete': 'Удалить',
+      'cabinet.files.confirm': 'Удалить файл? Ученики потеряют доступ, файл будет удалён с сервера.',
+      'cabinet.upload': 'Загрузить задачник',
+      'cabinet.upload.term': 'Срок хранения',
+      'cabinet.upload.btn': 'Загрузить в облако',
+      'cabinet.upload.ok': 'Задачник загружен. Токен для учеников: ',
+      'cabinet.upload.noFile': 'Выберите файл .pvz.',
+      'cabinet.logout': 'Выйти',
+    },
+    en: {
+      'nav.home': 'Home',
+      'nav.pricing': 'Pricing',
+      'nav.admin': 'Teacher panel',
+      'nav.cabinet': 'Cabinet',
+      'foot.line': '© PVZ — a taskbook that comes and goes on its own.',
+      'foot.pricing': 'Pricing',
+      'foot.admin': 'Teacher panel',
+      'unit.month': '/mo',
+      'unit.h': 'h',
+      'unit.min': 'min',
+      'unit.d': 'd',
+      'unit.lessMin': 'under a minute',
+      'retention.hours48': '48 hours',
+      'retention.week1': '1 week',
+      'retention.month1': '1 month',
+      'retention.year1': '1 year',
+      'retention.forever': 'forever',
+      'retention.twoWeeks': '2 weeks',
+      'subject.informatics': 'Informatics',
+      'subject.english': 'English',
+      'subject.math': 'Math',
+      'plan.free': 'Free',
+      'plan.pro': 'Pro',
+      'plan.plus': 'Pro+',
+      'plan.until': 'active until',
+      'err.network': 'The server is not responding. Check your connection.',
+      'err.http': 'Server error',
+      'err.required': 'Fill in every field.',
+      'landing.hero.badge': 'School · Informatics · Math · English',
+      'landing.hero.title': 'A taskbook that comes and goes on its own.',
+      'landing.hero.lead': 'A teacher builds a taskbook, hands a six-character token to students and watches progress live. Free: up to 5 taskbooks for 48 hours — the server deletes them on its own.',
+      'landing.hero.cta1': 'Open the teacher panel',
+      'landing.hero.cta2': 'See pricing',
+      'landing.p1.role': '— teacher',
+      'landing.p1.desc': 'Taskbook editor with tests, .exe export, cloud upload and a live results board.',
+      'landing.p1.li1': 'Builds an offline .pvz and a standalone .exe',
+      'landing.p1.li2': 'Uploads the taskbook to the cloud in one click',
+      'landing.p1.li3': 'Shows the progress of every student in real time',
+      'landing.p2.role': '— student',
+      'landing.p2.desc': 'One .exe, no Python or Pascal to install. Opens offline or by token.',
+      'landing.p2.li1': 'Runs Python and Pascal ABC with built-in runners',
+      'landing.p2.li2': 'Sends progress to the teacher while the taskbook is open',
+      'landing.p2.li3': 'Dark theme and hints that help instead of nagging',
+      'landing.p3.desc': 'The server keeps a taskbook exactly as long as the teacher chose. Then deletes it automatically.',
+      'landing.p3.li1': 'Six-character tokens, passwords checked on the server',
+      'landing.p3.li2': 'Accounts, activation keys and the catalog live in the cloud',
+      'landing.p3.li3': 'HTTPS and request rate limits out of the box',
+      'landing.tiers.badge': 'Storage plans',
+      'landing.tiers.title': 'Keep a taskbook for as long as you need.',
+      'landing.tiers.lead': 'A plan is unlocked with an activation key in your cabinet — no auto-charges, no card on file.',
+      'landing.tiers.free.desc': 'Up to 5 taskbooks at once. Every file lives 48 hours, then the server deletes it.',
+      'landing.tiers.pro.desc': '20 taskbooks for 48 hours, 15 for a week, 5 for a month, 1 for a year. Pick the term at upload.',
+      'landing.tiers.plus.desc': '48 hours, a week and a month without limits, 100 files for a year and 20 taskbooks forever.',
+      'landing.tiers.cta': 'All plans',
+      'landing.store.badge': 'Taskbook catalog',
+      'landing.store.title': 'Ready-made taskbooks from other teachers.',
+      'landing.store.desc': 'Publish your taskbooks and download others by subscription: per class, per subject or the whole catalog.',
+      'landing.store.sub.a': 'Subject subscription —',
+      'landing.store.sub.b': 'class subscription —',
+      'landing.store.sub.c': 'all subjects —',
+      'landing.store.gated': 'by subscription',
+      'landing.shelf1': 'Informatics · Grade 7',
+      'landing.shelf1.sub': 'Loops and conditions · 12 tasks',
+      'landing.shelf2': 'Math · Grade 5',
+      'landing.shelf2.sub': 'Fractions · 10 tasks',
+      'landing.shelf3': 'English · Grade 4',
+      'landing.shelf3.sub': 'Present Simple · 8 tasks',
+      'landing.shelf4': 'Informatics · Grade 10',
+      'landing.shelf4.sub': 'Exam · task 24',
+      'downloads.badge': 'Download apps',
+      'downloads.title': 'Clients for the teacher and the student',
+      'downloads.lead': 'Windows 10/11 (64-bit) builds. No installation — just run the file.',
+      'downloads.download': 'Download',
+      'downloads.soon': 'Coming soon',
+      'downloads.none': 'No builds published yet.',
+      'downloads.pvzt.desc': 'Taskbook editor: tests, .exe export, cloud upload and a live results board.',
+      'downloads.pvzp.desc': 'Student client: opens a taskbook offline or by token and reports progress.',
+      'pricing.hero.badge': 'Activation key · no auto-charges',
+      'pricing.hero.title': 'Simple: store your own taskbooks and download ready-made ones.',
+      'pricing.hero.lead': 'There are two kinds of keys. A storage key sets how many of your taskbooks stay in the cloud and for how long. A catalog key unlocks ready-made taskbooks. Both are entered in your cabinet.',
+      'pricing.free.tag': 'to try it out',
+      'pricing.free.li1': 'Up to 5 of your own taskbooks',
+      'pricing.free.li2': 'Each is kept 48 hours, then deleted',
+      'pricing.free.li3': 'Live class scoreboard',
+      'pricing.free.li4': 'No student sign-up needed',
+      'pricing.pro.tag': 'for a school term',
+      'pricing.pro.li1': '20 taskbooks for 48 hours',
+      'pricing.pro.li2': '15 for a week',
+      'pricing.pro.li3': '5 for a month',
+      'pricing.pro.li4': '1 for a year',
+      'pricing.plus.tag': 'for big classes',
+      'pricing.plus.li1': '48 hours — unlimited',
+      'pricing.plus.li2': 'A week — unlimited',
+      'pricing.plus.li3': 'A month — unlimited',
+      'pricing.plus.li4': '100 taskbooks for a year',
+      'pricing.plus.li5': '20 taskbooks forever',
+      'pricing.plan.keynote': 'The key is issued by the school admin',
+      'pricing.plan.freebtn': 'Start for free',
+      'pricing.plan.activate': 'Enter the key',
+      'pricing.sub.title': 'Catalog subscription',
+      'pricing.sub.lead': 'Unlocks downloading ready-made taskbooks. The key lasts 30 days.',
+      'pricing.sub.subject.name': 'One subject',
+      'pricing.sub.subject.desc': 'All grades of one subject.',
+      'pricing.sub.class.name': 'One class',
+      'pricing.sub.class.desc': 'One subject and one grade.',
+      'pricing.sub.all.name': 'All subjects',
+      'pricing.sub.all.desc': 'The whole catalog: every subject and grade.',
+      'pricing.sub.best': 'best value',
+      'pricing.table.title': 'How many taskbooks fit',
+      'pricing.table.lead': 'The limit of your own taskbooks for each storage term.',
+      'pricing.table.term': 'Storage term',
+      'pricing.table.hours': '48 hours',
+      'pricing.table.week': '1 week',
+      'pricing.table.month': '1 month',
+      'pricing.table.year': '1 year',
+      'pricing.table.forever': 'Forever',
+      'pricing.table.unlimited': 'unlimited',
+      'pricing.how.title': 'How it works',
+      'pricing.how.s1': 'Get a key from the school admin.',
+      'pricing.how.s2': 'Enter the key in your cabinet.',
+      'pricing.how.s3': 'The plan turns on right away.',
+      'pricing.faq.title': 'Questions and answers',
+      'pricing.faq.q1': 'Do I need to register students?',
+      'pricing.faq.a1': 'No. A student just types a first name, last name and grade.',
+      'pricing.faq.q2': 'What happens to a file after 48 hours?',
+      'pricing.faq.a2': 'On the free plan the server deletes it. Upload again or switch to Pro.',
+      'pricing.faq.q3': 'How do I pay?',
+      'pricing.faq.a3': 'Payment is not on the server: the admin gives you a key and you enter it in the cabinet. No auto-charges.',
+      'pricing.faq.q4': 'What if there is no internet in class?',
+      'pricing.faq.a4': 'Open a taskbook as a .pvz file — progress is saved and sent to the server when the network returns.',
+      'pricing.note': 'Prices are in USD; BYN and RUB follow the server rate.',
+      'auth.login.title': 'Teacher sign in',
+      'auth.login.lead': 'Sign in with your account name and password. The cabinet keeps taskbooks in the cloud and unlocks plans with activation keys.',
+      'auth.login.ph': 'masha.ivanova or teacher@school.by',
+      'auth.login.btn': 'Sign in',
+      'auth.login.no': 'No account yet?',
+      'auth.login.reg': 'Create one',
+      'auth.reg.title': 'Teacher registration',
+      'auth.reg.lead': 'An account name, name, school and email are enough to get a cabinet.',
+      'auth.reg.btn': 'Create account',
+      'auth.reg.have': 'Already have an account?',
+      'auth.reg.login': 'Sign in',
+      'auth.name': 'Full name',
+      'auth.name.ph': 'Maria Petrova',
+      'auth.school': 'School or gymnasium',
+      'auth.school.ph': 'Gymnasium No. 1, Minsk',
+      'auth.username': 'Account name',
+      'auth.username.ph': 'masha.ivanova',
+      'auth.username.hint': 'Latin letters, digits, dot, dash or underscore — 3 to 32 characters.',
+      'auth.email': 'Email',
+      'auth.email.ph': 'teacher@school.by',
+      'auth.password': 'Password',
+      'auth.password.ph': 'At least 6 characters',
+      'auth.logout': 'Sign out',
+      'auth.err.login': 'Wrong account name or password.',
+      'auth.err.throttle': 'Too many attempts. Wait a minute.',
+      'cabinet.title': 'Your cabinet',
+      'cabinet.lead': 'Profile, plans and cloud files with deletion timers.',
+      'cabinet.guest.title': 'Sign in to your cabinet',
+      'cabinet.guest.desc': 'The cabinet stores taskbooks in the cloud and activates keys. Sign in or register.',
+      'cabinet.guest.login': 'Sign in',
+      'cabinet.guest.reg': 'Register',
+      'cabinet.profile': 'Profile',
+      'cabinet.username': 'Account name',
+      'cabinet.profile.save': 'Save',
+      'cabinet.profile.saved': 'Profile updated.',
+      'cabinet.pwd': 'Change password',
+      'cabinet.pwd.current': 'Current password',
+      'cabinet.pwd.new': 'New password',
+      'cabinet.pwd.save': 'Update password',
+      'cabinet.pwd.saved': 'Password updated.',
+      'cabinet.plan': 'Plan',
+      'cabinet.subs': 'Catalog subscriptions',
+      'cabinet.subs.none': 'No subscriptions. Activate a subject or class key.',
+      'cabinet.sub.subject': 'Subject',
+      'cabinet.sub.class': 'Class',
+      'cabinet.sub.allSubjects': 'All subjects',
+      'cabinet.sub.allClasses': 'all grades',
+      'cabinet.sub.until': 'until',
+      'cabinet.storage': 'Storage',
+      'cabinet.storage.used': 'used',
+      'cabinet.storage.unlimited': 'unlimited',
+      'cabinet.key': 'Activation key',
+      'cabinet.key.ph': 'PVZ-XXXX-XXXX-XXXX',
+      'cabinet.key.btn': 'Activate',
+      'cabinet.files': 'Cloud files',
+      'cabinet.files.none': 'No files yet. Upload a .pvz from PVZT or with the form below.',
+      'cabinet.files.uploaded': 'Uploaded',
+      'cabinet.files.expires': 'Deletes in',
+      'cabinet.files.tasks': 'Tasks',
+      'cabinet.files.students': 'Students',
+      'cabinet.files.download': 'Download',
+      'cabinet.files.delete': 'Delete',
+      'cabinet.files.confirm': 'Delete this file? Students lose access and the file is removed from the server.',
+      'cabinet.upload': 'Upload a taskbook',
+      'cabinet.upload.term': 'Storage term',
+      'cabinet.upload.btn': 'Upload to the cloud',
+      'cabinet.upload.ok': 'Taskbook uploaded. Token for students: ',
+      'cabinet.upload.noFile': 'Choose a .pvz file.',
+      'cabinet.logout': 'Sign out',
+    },
+  };
+
+  const RETENTION_KEYS = {
+    0: 'retention.hours48',
+    1: 'retention.week1',
+    2: 'retention.month1',
+    3: 'retention.year1',
+    4: 'retention.forever',
+    5: 'retention.twoWeeks',
+  };
+  const SUBJECT_KEYS = {
+    informatics: 'subject.informatics',
+    english: 'subject.english',
+    math: 'subject.math',
+  };
+  const RATES = { USD: 1, BYN: 3.25, RUB: 95 };
+  const SYMBOLS = { USD: '$', BYN: 'Br', RUB: '₽' };
+  const TOKEN_KEY = 'pvzAccountToken';
+
+  const readSetting = (key, fallback) => {
+    try { return localStorage.getItem(key) || fallback; } catch (_) { return fallback; }
+  };
+  const writeSetting = (key, value) => {
+    try { localStorage.setItem(key, value); } catch (_) {}
+  };
+
+  let lang = readSetting('pvzLang', 'ru') === 'en' ? 'en' : 'ru';
+  let currency = ['USD', 'BYN', 'RUB'].includes(readSetting('pvzCurrency', 'USD'))
+    ? readSetting('pvzCurrency', 'USD')
+    : 'USD';
+  const listeners = [];
+
+  const t = (key) => {
+    const table = DICT[lang] || DICT.ru;
+    return Object.prototype.hasOwnProperty.call(table, key) ? table[key] : key;
+  };
+
+  const money = (usd) => {
+    const rate = RATES[currency] || 1;
+    const value = usd * rate;
+    const digits = currency === 'RUB' || value === 0 ? 0 : 2;
+    const text = value.toLocaleString(lang === 'ru' ? 'ru-RU' : 'en-US', {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+    return currency === 'USD' ? SYMBOLS.USD + text : text + ' ' + SYMBOLS[currency];
+  };
+
+  const retentionLabel = (value) => t(RETENTION_KEYS[value] || 'retention.hours48');
+  const subjectName = (id) => (SUBJECT_KEYS[id] ? t(SUBJECT_KEYS[id]) : id);
+
+  const applyTranslations = () => {
+    document.querySelectorAll('[data-i18n]').forEach((element) => {
+      const key = element.getAttribute('data-i18n');
+      const value = DICT[lang][key];
+      if (typeof value === 'string') element.textContent = value;
+    });
+    document.querySelectorAll('[data-i18n-ph]').forEach((element) => {
+      const key = element.getAttribute('data-i18n-ph');
+      const value = DICT[lang][key];
+      if (typeof value === 'string') element.setAttribute('placeholder', value);
+    });
+    document.documentElement.lang = lang;
+  };
+
+  const applyCurrency = () => {
+    document.querySelectorAll('[data-price]').forEach((element) => {
+      element.textContent = money(parseFloat(element.getAttribute('data-price')) || 0);
+    });
+  };
+
+  const syncSwitchers = () => {
+    document.querySelectorAll('[data-lang]').forEach((button) => {
+      button.classList.toggle('active', button.getAttribute('data-lang') === lang);
+    });
+    document.querySelectorAll('[data-currency]').forEach((button) => {
+      button.classList.toggle('active', button.getAttribute('data-currency') === currency);
+    });
+  };
+
+  const notify = () => listeners.forEach((callback) => callback());
+
+  const setLang = (next) => {
+    lang = next === 'en' ? 'en' : 'ru';
+    writeSetting('pvzLang', lang);
+    syncSwitchers();
+    applyTranslations();
+    applyCurrency();
+    notify();
+  };
+
+  const setCurrency = (next) => {
+    currency = ['USD', 'BYN', 'RUB'].includes(next) ? next : 'USD';
+    writeSetting('pvzCurrency', currency);
+    syncSwitchers();
+    applyCurrency();
+    notify();
+  };
+
+  const api = async (path, options = {}) => {
+    const token = readSetting(TOKEN_KEY, '');
+    const headers = Object.assign({}, options.headers || {});
+    if (token && !headers['Authorization']) headers['Authorization'] = 'Bearer ' + token;
+    let response;
+    try {
+      response = await fetch(path, Object.assign({}, options, { headers }));
+    } catch (_) {
+      const error = new Error(t('err.network'));
+      error.status = 0;
+      throw error;
+    }
+    if (!response.ok) {
+      let body = null;
+      try { body = await response.json(); } catch (_) {}
+      const message = body && typeof body.error === 'string' && body.error
+        ? body.error
+        : t('err.http') + ' (' + response.status + ')';
+      const error = new Error(message);
+      error.status = response.status;
+      throw error;
+    }
+    if (response.status === 204) return null;
+    const type = response.headers.get('content-type') || '';
+    return type.indexOf('application/json') === 0 ? response.json() : response;
+  };
+
+  document.querySelectorAll('[data-lang]').forEach((button) => {
+    button.addEventListener('click', () => setLang(button.getAttribute('data-lang')));
+  });
+  document.querySelectorAll('[data-currency]').forEach((button) => {
+    button.addEventListener('click', () => setCurrency(button.getAttribute('data-currency')));
+  });
+
+  const revealNow = () => {
+    const items = document.querySelectorAll('.reveal');
+    if (!('IntersectionObserver' in window)) {
+      items.forEach((element) => element.classList.add('visible'));
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12 });
+    items.forEach((element) => observer.observe(element));
+  };
+
+  window.PVZ = {
+    t,
+    money,
+    locale: () => (lang === 'ru' ? 'ru-RU' : 'en-US'),
+    lang: () => lang,
+    currency: () => currency,
+    api,
+    onChange: (callback) => listeners.push(callback),
+    getToken: () => readSetting(TOKEN_KEY, ''),
+    setToken: (value) => {
+      if (value) writeSetting(TOKEN_KEY, value);
+      else {
+        try { localStorage.removeItem(TOKEN_KEY); } catch (_) {}
+      }
+    },
+    retentionLabel,
+    subjectName,
+    reveal: revealNow,
+  };
+
+  applyTranslations();
+  applyCurrency();
+  syncSwitchers();
+  revealNow();
+})();
+</script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  const esc = (value) => String(value).replace(/[&<>"']/g, (c) => ESC[c]);
+  const RETENTION_NAMES = { 0: 'Hours48', 1: 'Week1', 2: 'Month1', 3: 'Year1', 4: 'Forever', 5: 'TwoWeeks' };
+
+  const guestView = $('guestView');
+  const cabinetView = $('cabinetView');
+  const filesEl = $('files');
+  const uploadRetention = $('uploadRetention');
+  let profile = null;
+  let files = [];
+
+  const fmtDate = (iso) => new Date(iso).toLocaleString(PVZ.locale(), {
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+
+  const fmtLeft = (ms) => {
+    if (ms <= 0) return '—';
+    const total = Math.floor(ms / 1000);
+    const days = Math.floor(total / 86400);
+    const hours = Math.floor((total % 86400) / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    if (days > 0) return days + ' ' + PVZ.t('unit.d') + ' ' + hours + ' ' + PVZ.t('unit.h');
+    if (hours > 0) return hours + ' ' + PVZ.t('unit.h') + ' ' + minutes + ' ' + PVZ.t('unit.min');
+    if (minutes > 0) return minutes + ' ' + PVZ.t('unit.min');
+    return PVZ.t('unit.lessMin');
+  };
+
+  const planName = () => {
+    if (!profile) return '';
+    if (profile.plan === 'free') return PVZ.t('plan.free');
+    if (profile.plan === 'pro') return PVZ.t('plan.pro');
+    if (profile.plan === 'pro_plus') return PVZ.t('plan.plus');
+    return profile.planDisplayName;
+  };
+
+  const bucketCapacity = (bucket) => bucket.limit === -1
+    ? bucket.used + ' / ' + PVZ.t('cabinet.storage.unlimited')
+    : bucket.used + ' / ' + bucket.limit;
+
+  const renderProfile = () => {
+    if (!profile) return;
+    $('planBadge').textContent = planName();
+    $('who').innerHTML =
+      '<span class="name">' + esc(profile.fullName) + '</span>' +
+      '<span class="line">' + esc(profile.email) + '</span>' +
+      '<span class="line">' + esc(PVZ.t('cabinet.username')) + ': ' + esc(profile.username) + '</span>' +
+      '<span class="line">' + esc(profile.school) + '</span>';
+    $('fullName').value = profile.fullName;
+    $('school').value = profile.school;
+    $('planLine').innerHTML = profile.planUntil
+      ? '<span class="line">' + PVZ.t('plan.until') + ' ' + fmtDate(profile.planUntil) + '</span>'
+      : '';
+    $('buckets').innerHTML = profile.storage.map((bucket) =>
+      '<div class="bucket"><b>' + esc(PVZ.retentionLabel(bucket.retention)) + '</b>' +
+      '<span class="muted">' + esc(bucketCapacity(bucket)) + '</span></div>').join('');
+    $('subs').innerHTML = profile.subscriptions.length
+      ? profile.subscriptions.map((sub) => {
+          const what = sub.kind === 'all'
+            ? esc(PVZ.t('cabinet.sub.allSubjects'))
+            : sub.classNumber
+              ? esc(PVZ.subjectName(sub.subject)) + ' · ' + sub.classNumber + ' ' + (PVZ.lang() === 'en' ? 'grade' : 'класс')
+              : esc(PVZ.subjectName(sub.subject)) + ' · ' + PVZ.t('cabinet.sub.allClasses');
+          return '<div class="sub"><b>' + what + '</b><span class="muted">' +
+            PVZ.t('cabinet.sub.until') + ' ' + fmtDate(sub.expiresAt) + '</span></div>';
+        }).join('')
+      : '<div class="empty">' + esc(PVZ.t('cabinet.subs.none')) + '</div>';
+  };
+
+  const renderRetentionSelect = () => {
+    if (!profile) return;
+    const previous = uploadRetention.value;
+    uploadRetention.innerHTML = profile.storage.map((bucket) =>
+      '<option value="' + RETENTION_NAMES[bucket.retention] + '">' +
+      esc(PVZ.retentionLabel(bucket.retention)) + ' · ' + esc(bucketCapacity(bucket)) + '</option>').join('');
+    if (previous && uploadRetention.querySelector('option[value="' + previous + '"]'))
+      uploadRetention.value = previous;
+  };
+
+  const tick = () => {
+    const now = Date.now();
+    document.querySelectorAll('[data-countdown]').forEach((element) => {
+      element.textContent = fmtLeft(new Date(element.getAttribute('data-countdown')).getTime() - now);
+    });
+  };
+
+  const renderFiles = () => {
+    if (!files.length) {
+      filesEl.innerHTML = '<div class="empty">' + esc(PVZ.t('cabinet.files.none')) + '</div>';
+      return;
+    }
+    filesEl.innerHTML = files.map((file) =>
+      '<div class="file-row">' +
+        '<div><span class="token-chip">' + esc(file.tokenHint) + '</span> ' +
+        '<span class="badge muted">' + esc(PVZ.retentionLabel(file.retention)) + '</span></div>' +
+        '<div class="file-meta">' +
+          '<span>' + PVZ.t('cabinet.files.uploaded') + ': ' + fmtDate(file.uploadedAt) + '</span>' +
+          '<span>' + PVZ.t('cabinet.files.expires') + ': <b data-countdown="' + esc(file.expiresAt) + '">—</b></span>' +
+          '<span>' + PVZ.t('cabinet.files.tasks') + ': ' + file.totalTasks + '</span>' +
+          '<span>' + PVZ.t('cabinet.files.students') + ': ' + file.studentsCount + '</span>' +
+        '</div>' +
+        '<div class="file-actions">' +
+          '<button class="btn secondary small" data-act="download" data-id="' + esc(file.id) + '">' +
+            esc(PVZ.t('cabinet.files.download')) + '</button>' +
+          '<button class="btn danger small" data-act="delete" data-id="' + esc(file.id) + '">' +
+            esc(PVZ.t('cabinet.files.delete')) + '</button>' +
+        '</div>' +
+      '</div>').join('');
+    tick();
+  };
+
+  const renderAll = () => {
+    renderProfile();
+    renderRetentionSelect();
+    renderFiles();
+  };
+
+  const refresh = async () => {
+    profile = await PVZ.api('/api/account/me');
+    renderProfile();
+    renderRetentionSelect();
+    files = await PVZ.api('/api/account/files');
+    renderFiles();
+  };
+
+  const showGuest = () => {
+    cabinetView.hidden = true;
+    guestView.hidden = false;
+  };
+
+  const showCabinet = () => {
+    guestView.hidden = true;
+    cabinetView.hidden = false;
+    PVZ.reveal();
+  };
+
+  const boot = async () => {
+    if (!PVZ.getToken()) {
+      showGuest();
+      return;
+    }
+    showCabinet();
+    try {
+      await refresh();
+    } catch (error) {
+      if (error.status === 401) {
+        PVZ.setToken('');
+        showGuest();
+      } else {
+        $('filesError').textContent = error.message;
+      }
+    }
+  };
+
+  const downloadFile = async (id) => {
+    $('filesError').textContent = '';
+    try {
+      const response = await PVZ.api('/api/account/files/' + id + '/download');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'taskbook.pvz';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      $('filesError').textContent = error.message;
+    }
+  };
+
+  const deleteFile = async (id) => {
+    if (!confirm(PVZ.t('cabinet.files.confirm'))) return;
+    $('filesError').textContent = '';
+    try {
+      await PVZ.api('/api/account/files/' + id, { method: 'DELETE' });
+      await refresh();
+    } catch (error) {
+      $('filesError').textContent = error.message;
+    }
+  };
+
+  filesEl.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-act]');
+    if (!button) return;
+    const id = button.getAttribute('data-id');
+    if (button.getAttribute('data-act') === 'download') downloadFile(id);
+    else deleteFile(id);
+  });
+
+  $('saveProfileBtn').addEventListener('click', async () => {
+    $('profileOk').textContent = '';
+    $('profileError').textContent = '';
+    try {
+      profile = await PVZ.api('/api/account/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName: $('fullName').value, school: $('school').value }),
+      });
+      $('profileOk').textContent = PVZ.t('cabinet.profile.saved');
+      renderProfile();
+    } catch (error) {
+      $('profileError').textContent = error.message;
+    }
+  });
+
+  $('savePwdBtn').addEventListener('click', async () => {
+    $('pwdOk').textContent = '';
+    $('pwdError').textContent = '';
+    try {
+      await PVZ.api('/api/account/me/password', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: $('currentPassword').value,
+          newPassword: $('newPassword').value,
+        }),
+      });
+      $('pwdOk').textContent = PVZ.t('cabinet.pwd.saved');
+      $('currentPassword').value = '';
+      $('newPassword').value = '';
+    } catch (error) {
+      $('pwdError').textContent = error.message;
+    }
+  });
+
+  $('activateBtn').addEventListener('click', async () => {
+    $('keyOk').textContent = '';
+    $('keyError').textContent = '';
+    const code = $('keyCode').value.trim();
+    if (!code) {
+      $('keyError').textContent = PVZ.t('err.required');
+      return;
+    }
+    $('activateBtn').disabled = true;
+    try {
+      const result = await PVZ.api('/api/account/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code }),
+      });
+      $('keyOk').textContent = result.message;
+      $('keyCode').value = '';
+      profile = result.profile;
+      renderProfile();
+      renderRetentionSelect();
+      files = await PVZ.api('/api/account/files');
+      renderFiles();
+    } catch (error) {
+      $('keyError').textContent = error.message;
+    } finally {
+      $('activateBtn').disabled = false;
+    }
+  });
+
+  $('keyCode').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') $('activateBtn').click();
+  });
+
+  $('uploadBtn').addEventListener('click', async () => {
+    $('uploadOk').textContent = '';
+    $('uploadError').textContent = '';
+    const input = $('uploadFile');
+    if (!input.files.length) {
+      $('uploadError').textContent = PVZ.t('cabinet.upload.noFile');
+      return;
+    }
+    const file = input.files[0];
+    $('uploadBtn').disabled = true;
+    try {
+      const begin = await PVZ.api('/api/upload/begin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: 'account-file', retention: uploadRetention.value, size: file.size }),
+      });
+      const putResponse = await fetch(begin.uploadUrl, {
+        method: 'PUT',
+        headers: begin.headers,
+        body: file,
+      });
+      if (!putResponse.ok) {
+        throw new Error(PVZ.t('err.http') + ' (' + putResponse.status + ')');
+      }
+      const result = await PVZ.api('/api/upload/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uploadId: begin.uploadId }),
+      });
+      $('uploadOk').textContent = PVZ.t('cabinet.upload.ok') + result.receipt.token;
+      input.value = '';
+      await refresh();
+    } catch (error) {
+      $('uploadError').textContent = error.message;
+    } finally {
+      $('uploadBtn').disabled = false;
+    }
+  });
+
+  $('logoutBtn').addEventListener('click', async () => {
+    try { await PVZ.api('/api/account/logout', { method: 'POST' }); }
+    catch (_) { }
+    PVZ.setToken('');
+    showGuest();
+  });
+
+  PVZ.onChange(() => {
+    if (profile) renderAll();
+  });
+
+  setInterval(tick, 1000);
+  boot();
+})();
+</script>
+</body>
+</html>

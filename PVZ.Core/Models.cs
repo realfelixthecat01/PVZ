@@ -106,6 +106,9 @@ public sealed record OnlineProgressUpdate(string SessionId, IReadOnlyList<Studen
 
 public sealed record OnlineStudentInfo(string FirstName, string LastName, string ClassName);
 
+/// <summary>Ответ на запрос/отправку кадра: идёт ли сейчас просмотр экрана ученика.</summary>
+public sealed record ScreenWatchStateDto(bool Watching);
+
 public sealed record TeacherLoginReceipt(string AccessToken, DateTimeOffset ExpiresAt);
 
 public sealed record TeacherSessionUploadReceipt(string Id, string Token, DateTimeOffset ExpiresAt, RetentionPeriod Retention);
@@ -127,7 +130,8 @@ public sealed record SessionStudentDto(
     int CompletedTasks,
     int TotalTasks,
     bool IsOnline,
-    IReadOnlyList<StudentTaskProgressDto> Tasks);
+    IReadOnlyList<StudentTaskProgressDto> Tasks,
+    string SessionId = "");
 
 public sealed record TeacherSessionDto(
     string Id,

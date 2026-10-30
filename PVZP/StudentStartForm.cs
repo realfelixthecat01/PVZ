@@ -72,8 +72,6 @@ public sealed class StudentStartForm : Form
         var firstName = CreateStudentField("Имя");
         var lastName = CreateStudentField("Фамилия");
         var className = CreateStudentField("Класс");
-        var server = CreateStudentField("Адрес сервера (ссылка из «Сервер и ссылка»)");
-        server.Text = ServerAddressStore.Load() ?? string.Empty;
         var open = CreateButton("Подключиться", primary: true, PvzFormButtonIcons.Glyphs.Connect);
         open.Click += async (_, _) =>
         {
@@ -89,18 +87,6 @@ public sealed class StudentStartForm : Form
                 MessageBox.Show(this, "Укажите имя, фамилию и класс.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            if (TaskbookOnlineClient.RequireExplicitServerUrl && string.IsNullOrWhiteSpace(server.Text))
-            {
-                MessageBox.Show(
-                    this,
-                    "Вставьте ссылку на сервер, которую выдал учитель.",
-                    Text,
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return;
-            }
-
-            SaveServerAddress(server.Text);
             await OpenOnlineTaskbookAsync(
                 token.Text.Trim().ToUpperInvariant(),
                 new OnlineStudentInfo(firstName.Text.Trim(), lastName.Text.Trim(), className.Text.Trim()));
@@ -109,22 +95,12 @@ public sealed class StudentStartForm : Form
         back.Click += (_, _) => ShowSourceChoices();
         AddCentered(title, 105);
         AddCentered(subtitle, 158);
-        AddCentered(token, 226);
-        AddCentered(firstName, 270);
-        AddCentered(lastName, 316);
-        AddCentered(className, 362);
-        AddCentered(server, 408);
-        AddCentered(open, 460);
-        AddCentered(back, 528);
-    }
-
-    private static void SaveServerAddress(string raw)
-    {
-        raw = raw.Trim();
-        if (raw.Length == 0 || raw == TaskbookOnlineClient.DefaultServerUrl)
-            ServerAddressStore.Save(null);
-        else
-            ServerAddressStore.Save(raw);
+        AddCentered(token, 240);
+        AddCentered(firstName, 288);
+        AddCentered(lastName, 336);
+        AddCentered(className, 384);
+        AddCentered(open, 444);
+        AddCentered(back, 516);
     }
 
     private TextBox CreateStudentField(string placeholder)
