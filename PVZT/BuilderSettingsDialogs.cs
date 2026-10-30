@@ -80,7 +80,7 @@ internal static class BuilderSettingsDialogs
         };
         planCard.Controls.AddRange([planTitle, freePlan, paidPlan, planNote]);
 
-        var serverLabel = TaskbookOnlineClient.TryResolveServerUrl()?.TrimEnd('/') ?? "ссылка ещё не задана";
+        var serverLabel = TaskbookOnlineClient.ResolveServerUrl().TrimEnd('/');
         var note = new Label
         {
             Text = $"Задачник загрузится на сервер PVZS ({serverLabel}): ученики\nподключатся по 6-символьному токену, а вы увидите таблицу результатов.",

@@ -7,6 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\PVZ.Core\PVZ.Core.csproj" />
-    <ProjectReference Include="..\PVZS\PVZS.csproj" />
+    <ProjectReference Include="..\PVZ.Catalog\PVZ.Catalog.csproj" />
   </ItemGroup>
 </Project>

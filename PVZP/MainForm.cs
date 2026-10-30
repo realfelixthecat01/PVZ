@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Drawing.Imaging;
 using PVZ.Core;
 
 namespace PVZ.Player;
@@ -17,6 +18,10 @@ internal sealed class MainForm : Form
     private readonly OnlineStudentSession? _onlineSession;
     private readonly string? _serverUrl;
     private readonly System.Windows.Forms.Timer _onlineHeartbeat = new() { Interval = 5000 };
+    private readonly System.Windows.Forms.Timer _screenWatch = new() { Interval = 2000 };
+    private int _screenWatchBusy;
+    private bool _screenShareStopped;
+    private Panel? _screenShareBanner;
     private readonly TabControl _tabs;
     private readonly List<TaskWorkspaceControl> _taskViews = new();
     private ListView _resultsList = null!;
@@ -59,7 +64,12 @@ internal sealed class MainForm : Form
         _onlineSession = onlineSession;
         _serverUrl = serverUrl;
         _onlineHeartbeat.Tick += async (_, _) => await ReportOnlineProgressAsync();
-        FormClosed += (_, _) => _onlineHeartbeat.Dispose();
+        _screenWatch.Tick += async (_, _) => await PollScreenShareAsync();
+        FormClosed += (_, _) =>
+        {
+            _onlineHeartbeat.Dispose();
+            _screenWatch.Dispose();
+        };
         MinimumSize = new Size(900, 600);
         ClientSize = new Size(1180, 780);
         BackColor = CanvasColor;
@@ -89,8 +99,10 @@ internal sealed class MainForm : Form
         ApplySequentialUnlock();
         if (_onlineSession is not null && !string.IsNullOrWhiteSpace(_serverUrl))
         {
+            BuildScreenShareBanner();
             _onlineStatusLabel.Text = "Онлайн-синхронизация подключается...";
             _onlineHeartbeat.Start();
+            _screenWatch.Start();
             Shown += async (_, _) => await ReportOnlineProgressAsync();
             Shown += async (_, _) => await LoadExchangeFilesAsync();
         }
@@ -863,5 +875,130 @@ internal sealed class MainForm : Form
         {
             Interlocked.Exchange(ref _reportPending, 0);
         }
+    }
+
+    // ---- Просмотр экрана учителем: по кнопке, с видимой плашкой и кнопкой «Стоп» ----
+
+    private void BuildScreenShareBanner()
+    {
+        var banner = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 46,
+            BackColor = Color.FromArgb(255, 209, 102),
+            Visible = false,
+        };
+        var label = new Label
+        {
+            Text = "Учитель просматривает ваш экран",
+            AutoSize = true,
+            ForeColor = Color.FromArgb(56, 38, 0),
+            Font = new Font("Segoe UI", 11F, FontStyle.Bold),
+            Location = new Point(16, 11),
+        };
+        var stop = new Button
+        {
+            Text = "Остановить",
+            AutoSize = false,
+            Size = new Size(120, 30),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(56, 38, 0),
+            ForeColor = Color.White,
+            Location = new Point(320, 8),
+        };
+        stop.FlatAppearance.BorderColor = Color.FromArgb(56, 38, 0);
+        stop.Click += async (_, _) =>
+        {
+            _screenShareStopped = true;
+            SetScreenShareBanner(false);
+            if (_onlineSession is not null && !string.IsNullOrWhiteSpace(_serverUrl))
+            {
+                try { await TaskbookOnlineClient.StopScreenShareAsync(_onlineSession.SessionId, _serverUrl); }
+                catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException or TaskCanceledException) { }
+            }
+        };
+        banner.Controls.Add(label);
+        banner.Controls.Add(stop);
+        Controls.Add(banner);
+        banner.BringToFront();
+        _screenShareBanner = banner;
+    }
+
+    private void SetScreenShareBanner(bool visible)
+    {
+        if (_screenShareBanner is null || IsDisposed)
+            return;
+        if (_screenShareBanner.Visible != visible)
+            _screenShareBanner.Visible = visible;
+    }
+
+    private async Task PollScreenShareAsync()
+    {
+        if (_onlineSession is null || string.IsNullOrWhiteSpace(_serverUrl) || IsDisposed)
+            return;
+        if (_screenShareStopped)
+        {
+            SetScreenShareBanner(false);
+            return;
+        }
+        if (Interlocked.Exchange(ref _screenWatchBusy, 1) != 0)
+            return;
+
+        try
+        {
+            var watching = await TaskbookOnlineClient.CheckScreenWatchAsync(_onlineSession.SessionId, _serverUrl);
+            if (!watching)
+            {
+                SetScreenShareBanner(false);
+                return;
+            }
+
+            byte[] jpeg;
+            try
+            {
+                jpeg = CaptureScreenJpeg(1280);
+            }
+            catch (Exception)
+            {
+                return;
+            }
+
+            SetScreenShareBanner(true);
+            var stillWatching = await TaskbookOnlineClient.SendScreenFrameAsync(_onlineSession.SessionId, jpeg, _serverUrl);
+            if (!stillWatching)
+                SetScreenShareBanner(false);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException or TaskCanceledException)
+        {
+            // Тихий режим: ошибки просмотра не мешают ученику решать задачник.
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _screenWatchBusy, 0);
+        }
+    }
+
+    private static byte[] CaptureScreenJpeg(int maxWidth)
+    {
+        var bounds = SystemInformation.VirtualScreen;
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+            throw new InvalidOperationException("Не удалось определить размер экрана.");
+
+        using var full = new Bitmap(bounds.Width, bounds.Height);
+        using (var graphics = Graphics.FromImage(full))
+            graphics.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size);
+
+        var width = Math.Min(maxWidth, full.Width);
+        var height = Math.Max(1, (int)Math.Round(full.Height * (width / (double)full.Width)));
+        using var target = new Bitmap(width, height);
+        using (var graphics = Graphics.FromImage(target))
+            graphics.DrawImage(full, 0, 0, width, height);
+
+        using var buffer = new MemoryStream();
+        var encoder = ImageCodecInfo.GetImageEncoders().First(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
+        using var parameters = new EncoderParameters(1);
+        parameters.Param[0] = new EncoderParameter(Encoder.Quality, 55L);
+        target.Save(buffer, encoder, parameters);
+        return buffer.ToArray();
     }
 }

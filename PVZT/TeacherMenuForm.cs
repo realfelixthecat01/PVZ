@@ -16,7 +16,7 @@ internal sealed class TeacherMenuForm : Form
         Text = "Пункт Выдачи Задачек — учитель";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(600, 520);
-        ClientSize = new Size(660, 650);
+        ClientSize = new Size(660, 600);
         PvzTheme.ApplyWindow(this);
         PvzTheme.EnableAutoScale(this);
         PvzTheme.FitToScreen(this);
@@ -68,24 +68,16 @@ internal sealed class TeacherMenuForm : Form
         web.SetBounds(90, 384, 480, 58);
         web.Click += async (_, _) => await OpenWebCabinetAsync(web);
 
-        var server = CreateMenuButton("5. Адрес сервера (ссылка для входа)", primary: false, PvzFormButtonIcons.Glyphs.Connect);
-        server.SetBounds(90, 456, 480, 58);
-        server.Click += (_, _) =>
-        {
-            using var dialog = new ServerAddressDialog();
-            dialog.ShowDialog(this);
-        };
-
         _accountLabel = new Label
         {
             Text = "Учётная запись: вход не выполнен",
             AutoSize = false,
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = PvzTheme.Muted,
-            Bounds = new Rectangle(90, 528, 336, 44),
+            Bounds = new Rectangle(90, 462, 336, 44),
         };
         _accountButton = PvzTheme.SecondaryButton("Войти");
-        _accountButton.SetBounds(440, 528, 130, 44);
+        _accountButton.SetBounds(440, 462, 130, 44);
         _accountButton.Click += async (_, _) =>
             await PromptForAccountAsync(switchAccount: TeacherServerAuth.IsSignedIn);
 
@@ -96,10 +88,10 @@ internal sealed class TeacherMenuForm : Form
             TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = PvzTheme.Subtle,
             Font = PvzTheme.Caption,
-            Bounds = new Rectangle(40, 586, 580, 40),
+            Bounds = new Rectangle(40, 520, 580, 40),
         };
 
-        Controls.AddRange([title, subtitle, create, download, observe, web, server, _accountLabel, _accountButton, footer]);
+        Controls.AddRange([title, subtitle, create, download, observe, web, _accountLabel, _accountButton, footer]);
 
         Shown += async (_, _) => await PromptForAccountAsync();
     }
