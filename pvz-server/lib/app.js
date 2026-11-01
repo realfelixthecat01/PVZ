@@ -1,9 +1,12 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   MAX_PACKAGE_BYTES,
+  MAX_EXCHANGE_FILE_BYTES,
   MAX_SCREEN_FRAME_BYTES,
   rateLimitMultiplier,
 } from "./config.js";
@@ -12,18 +15,15 @@ import {
   initAccounts,
   login,
   loginRoot,
+  loginGuest,
   logout,
   register,
   changePassword,
   getProfile,
   updateProfile,
-  activateKey,
-  createKey,
-  listKeys,
   listUsers,
-  hasCatalogAccess,
 } from "./accounts.js";
-import { effectivePlan, planDisplayName } from "./limits.js";
+import { RETENTION } from "./limits.js";
 import {
   listAllSessions,
   listOwnedSessions,
@@ -33,6 +33,7 @@ import {
   extendSession,
   closeSession,
   downloadSessionPackage,
+  getSessionForReport,
   downloadPackageByToken,
   startStudentSession,
   reportProgress,
@@ -49,23 +50,34 @@ import {
   openStudentFile,
   listCatalogTaskbooks,
   downloadCatalogTaskbook,
+  listStudentHistory,
+  assertGuestSessionLimit,
   purgeExpired,
 } from "./store.js";
 import { beginUpload, completeUpload, putUpload, cleanupUploads } from "./uploads.js";
 import { beginSeedUpload, resetSeedArea } from "./seed.js";
 import { listPublicDownloads, listAllDownloads, findPublicDownload, openPublicDownload } from "./downloads.js";
 import { InvalidPackageError } from "./pvzPackage.js";
+import { resultsCsv, sessionReport } from "./reporting.js";
 import { renderLanding } from "./pages/landing.js";
 import {
   HttpError,
   UnauthorizedError,
   parseJsonBody,
   isTokenShaped,
+  secretsEqual,
 } from "./util.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const publicDirectory = path.join(here, "..", "public");
 const pageCache = new Map();
+
+// Скрипты и стили страниц лежат рядом с приложением, инлайн-обработчики в HTML есть,
+// поэтому unsafe-inline оставлен, зато внешние источники запрещены.
+const HTML_PAGES = new Set(["/", "/admin", "/login", "/register", "/cabinet"]);
+const PAGE_CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';"
+  + " script-src 'self' 'unsafe-inline'; connect-src 'self'; form-action 'self';"
+  + " frame-ancestors 'none'; base-uri 'self'";
 
 function readPage(name) {
   if (!pageCache.has(name)) pageCache.set(name, fs.readFileSync(path.join(publicDirectory, name), "utf8"));
@@ -139,6 +151,12 @@ function contentDisposition(name) {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
 
+function resultsFileName(session) {
+  const now = new Date();
+  const pad = (part) => String(part).padStart(2, "0");
+  return `pvz-rezultaty-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}-${session.id.slice(0, 6)}.csv`;
+}
+
 function sendBuffer(request, response, buffer, name) {
   response.setHeader("Content-Type", "application/octet-stream");
   response.setHeader("Content-Disposition", contentDisposition(name));
@@ -179,6 +197,14 @@ export async function createApp() {
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", true);
+  app.use((request, response, next) => {
+    response.setHeader("X-Content-Type-Options", "nosniff");
+    response.setHeader("X-Frame-Options", "DENY");
+    response.setHeader("Referrer-Policy", "no-referrer");
+    response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    if (HTML_PAGES.has(request.path)) response.setHeader("Content-Security-Policy", PAGE_CSP);
+    next();
+  });
   app.use(express.json({ limit: "2mb" }));
 
   const teacherApi = rateLimiter(90);
@@ -186,8 +212,11 @@ export async function createApp() {
   const accountApi = rateLimiter(120);
   const accountAuth = rateLimiter(10);
   const teacherLogin = rateLimiter(5, { multiplied: false });
+  // PUT идёт по одноразовому uploadId без токена, но тело до 32 МиБ: частоту
+  // держим под контролем, иначе любой может гонать тяжёлые запросы.
+  const uploadPut = rateLimiter(60);
 
-  // ---- страницы ----
+  // страницы
 
   app.get("/health", (request, response) => response.json({ status: "ok" }));
   app.get("/", async (request, response, next) => {
@@ -199,7 +228,6 @@ export async function createApp() {
     }
   });
   for (const [route, file] of [
-    ["/pricing", "pricing.html"],
     ["/admin", "admin.html"],
     ["/login", "login.html"],
     ["/register", "register.html"],
@@ -214,7 +242,7 @@ export async function createApp() {
     response.type("application/javascript").send(readPage("site-common.js"));
   });
 
-  // ---- скачивание сборок ----
+  // скачивание сборок
 
   app.get("/api/downloads", async (request, response, next) => {
     try {
@@ -255,7 +283,7 @@ export async function createApp() {
     }
   });
 
-  // ---- каталог задачников ----
+  // каталог задачников
 
   app.get("/api/catalog/:subject/:classNumber", async (request, response, next) => {
     try {
@@ -271,9 +299,6 @@ export async function createApp() {
       const classNumber = Number(request.params.classNumber);
       const principal = await principalOf(request);
       if (!principal) return response.status(401).json({ error: "Войдите в личный кабинет, чтобы скачивать задачники из каталога." });
-      if (!(await hasCatalogAccess(principal, request.params.subject, classNumber))) {
-        return response.status(403).json({ error: "Нужна подписка на предмет, класс или весь каталог. Активируйте ключ в личном кабинете." });
-      }
       let packageBuffer;
       packageBuffer = await downloadCatalogTaskbook(request.params.subject, classNumber, request.params.fileName);
       if (!packageBuffer) return response.status(404).end();
@@ -283,12 +308,12 @@ export async function createApp() {
     }
   });
 
-  // ---- вход учителя и задачники ----
+  // вход учителя и задачники
 
   app.post("/api/teacher/login", teacherLogin, async (request, response, next) => {
     try {
       if (!parseJsonBody(request.body)) return response.status(400).json({ error: "Введите пароль доступа." });
-      const receipt = await loginRoot(request.body.password);
+      const receipt = await loginRoot(request.body.password, clientAddress(request));
       if (!receipt) return response.status(401).end();
       response.json({ accessToken: receipt.accessToken, expiresAt: receipt.expiresAt });
     } catch (error) {
@@ -303,17 +328,14 @@ export async function createApp() {
     async (request, response, next) => {
       try {
         const principal = await requirePrincipal(request);
-        const plan = String(request.query.plan ?? "").toLowerCase();
-        const paid = plan === "paid-month" || plan === "paidonemonth";
         if (!Buffer.isBuffer(request.body)) return response.status(415).end();
         if (request.body.length > MAX_PACKAGE_BYTES) {
           return response.status(400).json({ error: "Размер .pvz превышает 16 МиБ." });
         }
+        if (principal.isGuest) await assertGuestSessionLimit(principal.userId);
         const receipt = await uploadPackageBuffer(request.body, {
-          retention: paid ? 2 : 5,
-          plan: paid ? 1 : 0,
+          retention: principal.isGuest ? RETENTION.HOURS_48 : RETENTION.TWO_WEEKS,
           ownerUserId: principal.kind === "root" ? null : principal.userId,
-          enforceQuota: false,
           principal: null,
         });
         response.json(receipt);
@@ -381,7 +403,31 @@ export async function createApp() {
     }
   });
 
-  // ---- аккаунты ----
+  app.get("/api/teacher/sessions/:id/stats", teacherApi, async (request, response, next) => {
+    try {
+      const principal = await requirePrincipal(request);
+      const session = await getSessionForReport(principal, request.params.id);
+      if (!session) return response.status(404).end();
+      response.json(sessionReport(session));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/teacher/sessions/:id/export.csv", teacherApi, async (request, response, next) => {
+    try {
+      const principal = await requirePrincipal(request);
+      const session = await getSessionForReport(principal, request.params.id);
+      if (!session) return response.status(404).end();
+      response.setHeader("Content-Type", "text/csv; charset=utf-8");
+      response.setHeader("Content-Disposition", contentDisposition(resultsFileName(session)));
+      response.end(resultsCsv(session));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // аккаунты
 
   app.post("/api/account/register", accountAuth, async (request, response, next) => {
     try {
@@ -402,8 +448,24 @@ export async function createApp() {
       if (!parseJsonBody(request.body)) {
         return response.status(400).json({ error: "Введите имя аккаунта (или email) и пароль." });
       }
-      const result = await login(request.body.identifier, request.body.password);
+      const result = await login(request.body.identifier, request.body.password, clientAddress(request));
       if (!result) return response.status(401).json({ error: "Неверное имя аккаунта или пароль." });
+      response.json({
+        accessToken: result.receipt.accessToken,
+        expiresAt: result.receipt.expiresAt,
+        profile: await buildProfile(result.principal),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/guest/login", accountAuth, async (request, response, next) => {
+    try {
+      if (!parseJsonBody(request.body) || typeof request.body.secret !== "string") {
+        return response.status(400).json({ error: "Не передан гостевой ключ." });
+      }
+      const result = await loginGuest(request.body.secret, clientAddress(request));
       response.json({
         accessToken: result.receipt.accessToken,
         expiresAt: result.receipt.expiresAt,
@@ -449,21 +511,8 @@ export async function createApp() {
     try {
       const principal = await requirePrincipal(request);
       if (!parseJsonBody(request.body)) return response.status(400).json({ error: "Заполните оба поля пароля." });
-      await changePassword(principal, request.body.currentPassword, request.body.newPassword);
-      response.status(204).end();
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.post("/api/account/keys", accountApi, async (request, response, next) => {
-    try {
-      const principal = await requirePrincipal(request);
-      if (!parseJsonBody(request.body) || !String(request.body.code ?? "").trim()) {
-        return response.status(400).json({ error: "Введите ключ активации." });
-      }
-      const message = await activateKey(principal, request.body.code);
-      response.json({ message, profile: await buildProfile(principal) });
+      const receipt = await changePassword(principal, request.body.currentPassword, request.body.newPassword);
+      response.json({ accessToken: receipt.accessToken, expiresAt: receipt.expiresAt });
     } catch (error) {
       next(error);
     }
@@ -499,39 +548,11 @@ export async function createApp() {
     }
   });
 
-  // ---- админ ----
-
-  app.post("/api/admin/keys", teacherApi, async (request, response, next) => {
-    try {
-      const principal = await requireAdmin(request);
-      if (!parseJsonBody(request.body)) return response.status(400).json({ error: "Укажите параметры ключа." });
-      response.json(await createKey(principal, {
-        kind: request.body.kind,
-        storagePlan: request.body.storagePlan,
-        durationDays: Number(request.body.durationDays),
-        subject: request.body.subject,
-        classNumber: request.body.classNumber === null || request.body.classNumber === undefined
-          ? null
-          : Number(request.body.classNumber),
-      }));
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get("/api/admin/keys", teacherApi, async (request, response, next) => {
-    try {
-      await requireAdmin(request);
-      response.json(await listKeys());
-    } catch (error) {
-      next(error);
-    }
-  });
+  // админ
 
   app.get("/api/admin/teachers", teacherApi, async (request, response, next) => {
     try {
       await requireAdmin(request);
-      const now = new Date();
       const sessions = await listAllSessions();
       const users = await listUsers();
       const byOwner = new Map();
@@ -541,27 +562,20 @@ export async function createApp() {
         list.push(session);
         byOwner.set(session.ownerId, list);
       }
-      response.json(users.map((user) => {
-        const plan = effectivePlan(user, now);
-        const until = user.storageUntil ? new Date(user.storageUntil) : null;
-        return {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          fullName: user.fullName,
-          school: user.school,
-          plan,
-          planDisplayName: planDisplayName(plan),
-          planUntil: user.isAdmin || !until || until.getTime() <= now.getTime() ? null : until.toISOString(),
-          sessions: byOwner.get(user.id) ?? [],
-        };
-      }));
+      response.json(users.map((user) => ({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        fullName: user.fullName,
+        school: user.school,
+        sessions: byOwner.get(user.id) ?? [],
+      })));
     } catch (error) {
       next(error);
     }
   });
 
-  // ---- наполнение каталога и сборок (только администратор) ----
+  // наполнение каталога и сборок, только администратор
 
   app.post("/api/admin/seed", teacherApi, async (request, response, next) => {
     try {
@@ -583,7 +597,7 @@ export async function createApp() {
     }
   });
 
-  // ---- просмотр экрана ученика ----
+  // просмотр экрана ученика
 
   app.post("/api/admin/students/:ssid/watch", teacherApi, async (request, response, next) => {
     try {
@@ -617,16 +631,27 @@ export async function createApp() {
     }
   });
 
-  // ---- ученик ----
+  // маршруты ученика
 
   app.post("/api/taskbooks/:token/sessions", studentApi, async (request, response, next) => {
     try {
       if (!parseJsonBody(request.body)) {
         return response.status(400).json({ error: "Укажите имя, фамилию и класс." });
       }
-      const session = await startStudentSession(request.params.token, request.body);
+      const principal = await principalOf(request);
+      const accountUserId = principal && principal.role === "student" ? principal.userId : null;
+      const session = await startStudentSession(request.params.token, request.body, accountUserId);
       if (!session) return response.status(404).end();
       response.json(session);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/student/history", accountApi, async (request, response, next) => {
+    try {
+      const principal = await requirePrincipal(request);
+      response.json(await listStudentHistory(principal.userId));
     } catch (error) {
       next(error);
     }
@@ -742,7 +767,7 @@ export async function createApp() {
     }
   });
 
-  // ---- загрузка через begin / PUT / complete ----
+  // загрузка через begin / PUT / complete
 
   app.post("/api/upload/begin", accountApi, async (request, response, next) => {
     try {
@@ -760,7 +785,9 @@ export async function createApp() {
 
   app.put(
     "/api/upload/put/:uploadId",
-    express.raw({ type: () => true, limit: MAX_PACKAGE_BYTES + 1024 }),
+    uploadPut,
+    // Локальный бэкенд принимает тело целиком: файл обмена до 32 МиБ, задачник до 16 МиБ.
+    express.raw({ type: () => true, limit: MAX_EXCHANGE_FILE_BYTES + 1024 }),
     async (request, response, next) => {
       try {
         if (!Buffer.isBuffer(request.body)) return response.status(400).json({ error: "Пустое тело загрузки." });
@@ -781,13 +808,15 @@ export async function createApp() {
     }
   });
 
-  // ---- обслуживание ----
+  // обслуживание
 
   app.all("/api/cron/cleanup", async (request, response, next) => {
     try {
+      // Vercel присылает CRON_SECRET как Bearer; без переменной очистка просто закрыта.
       const secret = process.env.CRON_SECRET;
-      const token = bearerToken(request);
-      if (!secret || token !== secret) return response.status(401).end();
+      const header = String(request.headers.authorization ?? "");
+      const provided = header.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : "";
+      if (!secret || !secretsEqual(provided, secret)) return response.status(401).end();
       const sessions = await purgeExpired();
       const uploads = await cleanupUploads();
       response.json({ ok: true, sessions, uploads });
@@ -811,6 +840,10 @@ export async function createApp() {
     }
     if (error instanceof SyntaxError && "body" in error) {
       return response.status(400).json({ error: "Некорректный JSON в запросе." });
+    }
+    // withLock бросает обычную Error с полем status: 503, её тоже уважаем.
+    if (Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599) {
+      return response.status(error.status).json({ error: error.message });
     }
     console.error(error);
     response.status(500).json({ error: "Внутренняя ошибка сервера." });

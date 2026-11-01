@@ -29,3 +29,6 @@ tools/PascalABC/
 sessions/
 zadachniki/
 *.db
+
+# Локальные данные сервера: аккаунты, сессии, файлы загрузок
+/data/

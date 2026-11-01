@@ -1,11 +1,12 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using PVZ.Core;
 
 namespace PVZ.Catalog;
 
 /// <summary>
 /// Раскладывает стандартные задачники по предметам и классам.
-/// Используется и консольным PVZ.CatalogSeed, и сервером PVZS (автонаполнение каталога),
-/// и установщиком лаунчера.
+/// Используется консольным PVZ.CatalogSeed.
 /// </summary>
 public static class CatalogSeeder
 {
@@ -13,7 +14,7 @@ public static class CatalogSeeder
     public static int TotalCollections =>
         EnglishCollections.Build().Count
         + MathCollections.Build().Count
-        + TemplateCollections.BuildInformatics().Count;
+        + InformaticsCollections.Build().Count;
 
     /// <summary>
     /// Наполняет каталог стандартными сборниками. Существующие файлы не трогаются,
@@ -25,38 +26,19 @@ public static class CatalogSeeder
             throw new ArgumentException("Не задана папка каталога.", nameof(outputRoot));
 
         var created = 0;
-        created += SeedSubject(TaskbookCatalogSubjects.English, outputRoot, teacherPassword, overwrite);
-        created += SeedSubject(TaskbookCatalogSubjects.Math, outputRoot, teacherPassword, overwrite);
-        created += SeedTemplates(outputRoot, teacherPassword, overwrite);
+        created += SeedSubject(TaskbookCatalogSubjects.English, EnglishCollections.Build(), outputRoot, teacherPassword, overwrite);
+        created += SeedSubject(TaskbookCatalogSubjects.Math, MathCollections.Build(), outputRoot, teacherPassword, overwrite);
+        created += SeedSubject(TaskbookCatalogSubjects.Informatics, InformaticsCollections.Build(), outputRoot, teacherPassword, overwrite);
         return created;
     }
 
-    private static int SeedTemplates(string outputRoot, string teacherPassword, bool overwrite)
+    private static int SeedSubject(
+        string subject,
+        IReadOnlyList<FillBlankCollectionSeed> seeds,
+        string outputRoot,
+        string teacherPassword,
+        bool overwrite)
     {
-        const string subject = TaskbookCatalogSubjects.Informatics;
-        var created = 0;
-        foreach (var seed in TemplateCollections.BuildInformatics())
-        {
-            var directory = Path.Combine(outputRoot, subject, seed.ClassNumber.ToString());
-            var path = Path.Combine(directory, seed.FileName);
-            if (!overwrite && File.Exists(path))
-                continue;
-
-            var document = TemplateCollections.CreateDocument(subject, seed, teacherPassword);
-            Directory.CreateDirectory(directory);
-            TaskbookPackageIO.Save(path, document);
-            created++;
-        }
-
-        return created;
-    }
-
-    private static int SeedSubject(string subject, string outputRoot, string teacherPassword, bool overwrite)
-    {
-        var seeds = subject == TaskbookCatalogSubjects.Math
-            ? MathCollections.Build()
-            : EnglishCollections.Build();
-
         var created = 0;
         foreach (var seed in seeds)
         {

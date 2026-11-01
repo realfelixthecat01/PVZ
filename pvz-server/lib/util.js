@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 import crypto from "node:crypto";
 
 export class HttpError extends Error {
@@ -61,6 +63,14 @@ export function fixedTimeEqualHex(left, right) {
   } catch {
     return false;
   }
+}
+
+// Секреты из окружения (CRON_SECRET) бывают любой длины, поэтому сравниваем
+// посимвольно и без hex.
+export function secretsEqual(left, right) {
+  const a = Buffer.from(String(left ?? ""), "utf8");
+  const b = Buffer.from(String(right ?? ""), "utf8");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 export function isSessionId(value) {

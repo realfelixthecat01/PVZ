@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using PVZ.Core;
 
 namespace PVZ.Player;
@@ -52,7 +54,7 @@ internal sealed class TeacherSessionMonitorForm : Form
     public TeacherSessionMonitorForm()
     {
         PvzFormIcon.TryApply(this);
-        Text = "Пункт Выдачи Задачек — прогресс учеников";
+        Text = "Пункт Выдачи Задачек: прогресс учеников";
         StartPosition = FormStartPosition.CenterParent;
         MinimumSize = new Size(980, 620);
         ClientSize = new Size(1140, 700);
@@ -107,6 +109,26 @@ internal sealed class TeacherSessionMonitorForm : Form
             Margin = new Padding(0, 0, 8, 0),
         };
         sessionsGroup.Controls.Add(_sessionsList);
+
+        var csvButton = PvzTheme.SecondaryButton("Выгрузить CSV");
+        var statsButton = PvzTheme.SecondaryButton("Статистика");
+        csvButton.AutoSize = false;
+        csvButton.Width = 150;
+        csvButton.Height = 34;
+        statsButton.AutoSize = false;
+        statsButton.Width = 140;
+        statsButton.Height = 34;
+        csvButton.Click += async (_, _) => await ExportResultsCsvAsync();
+        statsButton.Click += async (_, _) => await ShowSessionStatsAsync();
+        var reportButtons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0, 8, 0, 0),
+        };
+        reportButtons.Controls.AddRange([csvButton, statsButton]);
+        sessionsGroup.Controls.Add(reportButtons);
 
         var studentsGroup = new GroupBox
         {
@@ -292,12 +314,82 @@ internal sealed class TeacherSessionMonitorForm : Form
             _students.SelectedItems[0].Tag is not SessionStudentDto student)
             return;
 
-        var header = $"{student.FirstName} {student.LastName}, класс {student.ClassName} — {student.EarnedPoints}/{student.MaximumPoints} баллов.";
+        var header = $"{student.FirstName} {student.LastName}, класс {student.ClassName}: {student.EarnedPoints}/{student.MaximumPoints} баллов.";
         var tasks = student.Tasks.Count == 0
             ? ["Пока нет данных о задачах."]
             : student.Tasks.Select((task, index) =>
-                $"Задача {index + 1}: {task.EarnedPoints} баллов — {(task.Completed ? "выполнена" : "в процессе")}");
+                $"Задача {index + 1}: {task.EarnedPoints} баллов, {(task.Completed ? "выполнена" : "в процессе")}");
         _taskDetails.Text = string.Join(Environment.NewLine, tasks.Prepend(header));
+    }
+
+    private TeacherSessionDto? SelectedSession() => (_sessionsList.SelectedItem as SessionListItem)?.Session;
+
+    private async Task ExportResultsCsvAsync()
+    {
+        var session = SelectedSession();
+        if (session is null || _accessToken is null || _serverUrl is null)
+        {
+            MessageBox.Show(this, "Сначала выберите задачник в списке слева.", Text,
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Выгрузить результаты учеников",
+            FileName = $"pvz-rezultaty-{DateTime.Now:yyyy-MM-dd-HHmm}.csv",
+            Filter = "Таблица CSV (*.csv)|*.csv",
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        await RunReportAsync(async () =>
+        {
+            var content = await TaskbookOnlineClient.DownloadResultsCsvAsync(_accessToken, session.Id, _serverUrl);
+            await File.WriteAllBytesAsync(dialog.FileName, content);
+            _status.Text = $"Результаты сохранены в {dialog.FileName}.";
+        });
+    }
+
+    private async Task ShowSessionStatsAsync()
+    {
+        var session = SelectedSession();
+        if (session is null || _accessToken is null || _serverUrl is null)
+        {
+            MessageBox.Show(this, "Сначала выберите задачник в списке слева.", Text,
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        await RunReportAsync(async () =>
+        {
+            var stats = await TaskbookOnlineClient.GetSessionStatsAsync(_accessToken, session.Id, _serverUrl);
+            TeacherSessionStatsForm.ShowForSession(this, stats);
+        });
+    }
+
+    private async Task RunReportAsync(Func<Task> action)
+    {
+        UseWaitCursor = true;
+        try
+        {
+            await action();
+        }
+        catch (ServerUnauthorizedException)
+        {
+            _accessToken = null;
+            await RefreshSessionsAsync();
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or HttpRequestException
+            or TaskCanceledException or IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, exception.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            if (!IsDisposed)
+                UseWaitCursor = false;
+        }
     }
 
     private static string FormatDuration(long seconds)

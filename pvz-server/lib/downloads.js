@@ -1,10 +1,12 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 import fs from "node:fs";
 import path from "node:path";
 import { blob, getJson, setJson, isBlobBackend } from "./storage.js";
 
 // Сборки клиентов PVZ для страницы скачивания: PVZP.exe и PVZT.exe.
-// На Vercel файлы лежат в Blob (pvz/downloads/), локально — в папке downloads.
-// Серверная сборка PVZS больше не публикуется — сервер теперь живёт на Vercel.
+// На Vercel файлы лежат в Blob (pvz/downloads/), локально в папке downloads.
+// Серверную сборку PVZS больше не публикуем: сервер живёт на Vercel.
 
 const ITEMS = [
   { id: "pvzp", fileName: "PVZP.exe", role: "student" },

@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 namespace PVZ.Core;
 
 [Flags]
@@ -18,17 +20,40 @@ public sealed class TestCaseDto
 }
 
 /// <summary>
-/// Тип задания. CodeTests — обычная задача с кодом и тестами.
-/// FillInBlanks — текст с пропусками «_»: ученик вписывает слова, приложение проверяет.
+/// Тип задания. CodeTests: обычная задача с кодом и тестами.
+/// FillInBlanks: текст с пропусками «_», ученик вписывает слова, приложение проверяет.
+/// Choice: вопрос с вариантами, ученик отмечает верные, неверная отметка снимает баллы.
+/// Matching: пары, ученик подбирает правую часть к каждой левой.
+/// ShortAnswer: вопрос, на который отвечают словом или числом в одно поле.
 /// </summary>
 public enum TaskbookTaskKind
 {
     CodeTests = 0,
     FillInBlanks = 1,
+    Choice = 2,
+    Matching = 3,
+    ShortAnswer = 4,
+}
+
+/// <summary>Один вариант в задании с выбором. Баллы дают верные отмеченные варианты, отмеченный зря отнимает столько же.</summary>
+public sealed class ChoiceOptionDto
+{
+    public string Text { get; set; } = "";
+    public bool Correct { get; set; }
+    public int Points { get; set; } = 25;
+}
+
+/// <summary>Одна пара в задании на соответствие. Порядок пар в списке и есть правильное соотнесение.</summary>
+public sealed class MatchPairDto
+{
+    public string Left { get; set; } = "";
+    public string Right { get; set; } = "";
+    public int Points { get; set; } = 25;
 }
 
 /// <summary>
-/// Один пропуск «_» в тексте задания. BlankPattern считает каждый непрерывный
+/// Один ответ для проверки: пропуск «_» в тексте задания или единственный ответ
+/// короткого задания. BlankPattern считает каждый непрерывный
 /// ряд подчёркиваний одним пропуском, поэтому порядок Blanks совпадает с порядком «_» в тексте.
 /// </summary>
 public sealed class FillBlankDto
@@ -49,6 +74,10 @@ public sealed class TaskbookTaskDto
     public TaskbookTaskKind Kind { get; set; } = TaskbookTaskKind.CodeTests;
 
     public List<FillBlankDto> Blanks { get; set; } = new();
+
+    public List<ChoiceOptionDto> Options { get; set; } = new();
+
+    public List<MatchPairDto> Pairs { get; set; } = new();
 }
 
 public sealed class TaskbookDocument
@@ -85,7 +114,7 @@ public static class TaskbookCatalogSubjects
     public static int MinimumClassNumber(string subject) => subject.ToLowerInvariant() switch
     {
         Informatics => 6,
-        English => 3,
+        English => 2,
         Math => 1,
         _ => throw new ArgumentException("Неизвестный предмет.", nameof(subject)),
     };
@@ -106,7 +135,6 @@ public sealed record OnlineProgressUpdate(string SessionId, IReadOnlyList<Studen
 
 public sealed record OnlineStudentInfo(string FirstName, string LastName, string ClassName);
 
-/// <summary>Ответ на запрос/отправку кадра: идёт ли сейчас просмотр экрана ученика.</summary>
 public sealed record ScreenWatchStateDto(bool Watching);
 
 public sealed record TeacherLoginReceipt(string AccessToken, DateTimeOffset ExpiresAt);
@@ -115,7 +143,6 @@ public sealed record TeacherSessionUploadReceipt(string Id, string Token, DateTi
 
 public sealed record SessionExtendReceipt(DateTimeOffset ExpiresAt);
 
-/// <summary>Ответ сервера на вход или регистрацию аккаунта учителя.</summary>
 public sealed record AccountAuthReceipt(string AccessToken, DateTimeOffset ExpiresAt, AccountProfileDto Profile);
 
 public sealed record SessionStudentDto(
@@ -145,12 +172,36 @@ public sealed record TeacherSessionDto(
     long? OwnerId = null,
     string? OwnerName = null);
 
+public sealed record SessionTaskStatDto(
+    int Number,
+    string Title,
+    int MaxPoints,
+    int Solved,
+    int Partially,
+    int Untouched,
+    double AveragePoints,
+    double AveragePercent);
+
+public sealed record SessionBestStudentDto(string Name, string ClassName, int EarnedPoints);
+
+public sealed record SessionStatsDto(
+    string SessionId,
+    string TokenHint,
+    DateTimeOffset UploadedAt,
+    DateTimeOffset ExpiresAt,
+    int TotalTasks,
+    int MaximumPoints,
+    int Students,
+    int Online,
+    int SolvedEverything,
+    double AveragePercent,
+    SessionBestStudentDto? BestStudent,
+    IReadOnlyList<SessionTaskStatDto> Tasks);
+
 /// <summary>Аккаунт учителя, подтверждённый локальным токеном.</summary>
 public sealed record AccountPrincipal(long UserId, string Username, string Email, string FullName, bool IsAdmin, string Kind);
 
-public sealed record AccountSubscriptionDto(string Kind, string Subject, int? ClassNumber, DateTimeOffset ExpiresAt);
-
-/// <summary>Занятость одной корзины хранения. Limit = -1 — без ограничений.</summary>
+/// <summary>Занятость одной корзины хранения. Limit равен -1, когда ограничений нет.</summary>
 public sealed record StorageBucketDto(RetentionPeriod Retention, int Used, int Limit);
 
 public sealed record AccountProfileDto(
@@ -160,25 +211,38 @@ public sealed record AccountProfileDto(
     string FullName,
     string School,
     bool IsAdmin,
-    string Plan,
-    string PlanDisplayName,
-    DateTimeOffset? PlanUntil,
-    IReadOnlyList<AccountSubscriptionDto> Subscriptions,
-    IReadOnlyList<StorageBucketDto> Storage);
+    IReadOnlyList<StorageBucketDto> Storage,
+    string Role = "teacher",
+    bool IsGuest = false,
+    string ClassName = "");
 
-/// <summary>Учитель со списком своих активных сессий — для админской панели.</summary>
+public sealed record StudentHistoryItemDto(
+    string SessionId,
+    string Subject,
+    int? ClassNumber,
+    DateTimeOffset UploadedAt,
+    DateTimeOffset UpdatedAt,
+    int EarnedPoints,
+    int MaximumPoints,
+    int CompletedTasks,
+    int TotalTasks,
+    string TeacherName);
+
+/// <summary>Кому принадлежит аккаунт: учитель публикует задачники, ученик решает их.</summary>
+public static class AccountRoles
+{
+    public const string Teacher = "teacher";
+    public const string Student = "student";
+}
+
 public sealed record AdminTeacherDto(
     long Id,
     string Username,
     string Email,
     string FullName,
     string School,
-    string Plan,
-    string PlanDisplayName,
-    DateTimeOffset? PlanUntil,
     IReadOnlyList<TeacherSessionDto> Sessions);
 
-/// <summary>Типы файлов пересылки внутри онлайн-задачника.</summary>
 public static class ExchangeFileKinds
 {
     public const string Material = "material";
@@ -187,7 +251,6 @@ public static class ExchangeFileKinds
     public static string DisplayName(string kind) => kind == Work ? "Работа ученика" : "Материал";
 }
 
-/// <summary>Файл пересылки: материал от учителя или работа ученика. Хранится на сервере рядом с задачником.</summary>
 public sealed record ExchangeFileDto(
     string Id,
     string Name,
@@ -211,22 +274,8 @@ public sealed record CabinetFileDto(
     int MaximumPoints,
     int StudentsCount);
 
-public sealed record ActivationKeyDto(
-    string Code,
-    string Kind,
-    string? StoragePlan,
-    int DurationDays,
-    string? Subject,
-    int? ClassNumber,
-    DateTimeOffset CreatedAt,
-    bool Used,
-    DateTimeOffset? UsedAt);
-
-/// <summary>Лимит тарифа исчерпан — сообщение предназначено учителю.</summary>
-public sealed class ServerQuotaException(string message) : Exception(message);
-
 /// <summary>
-/// Срок хранения онлайн-задачника. TwoWeeks — исторический тариф настольного PVZT «Бесплатный — 2 недели».
+/// Срок хранения онлайн-задачника. Задачник учителя лежит две недели, гостевой хранится 48 часов.
 /// </summary>
 public enum RetentionPeriod
 {
@@ -256,19 +305,19 @@ public static class RetentionPeriods
         RetentionPeriod.Week1 => TimeSpan.FromDays(7),
         RetentionPeriod.Month1 => TimeSpan.FromDays(30),
         RetentionPeriod.Year1 => TimeSpan.FromDays(365),
-        // «Навсегда» храним сто лет — этого хватит любому школьному архиву.
+        // «Навсегда» храним сто лет, этого хватит любому школьному архиву.
         RetentionPeriod.Forever => TimeSpan.FromDays(36500),
         _ => TimeSpan.FromDays(14),
     };
 
     public static string DisplayName(RetentionPeriod retention) => retention switch
     {
-        RetentionPeriod.Hours48 => "Бесплатный · 48 часов",
+        RetentionPeriod.Hours48 => "Хранение · 48 часов",
         RetentionPeriod.Week1 => "Хранение · 1 неделя",
         RetentionPeriod.Month1 => "Хранение · 1 месяц",
         RetentionPeriod.Year1 => "Хранение · 1 год",
         RetentionPeriod.Forever => "Постоянное хранение",
-        _ => "Бесплатный · 2 недели",
+        _ => "Хранение · 2 недели",
     };
 
     public static string ShortLabel(RetentionPeriod retention) => retention switch
@@ -279,79 +328,5 @@ public static class RetentionPeriods
         RetentionPeriod.Year1 => "1 год",
         RetentionPeriod.Forever => "∞",
         _ => "2 нед",
-    };
-}
-
-/// <summary>
-/// Тариф хранения настольного PVZT. Сервер переводит его в RetentionPeriod:
-/// «Бесплатный — 2 недели» хранит 14 дней, «Продлённый месяц» — настоящий месяц (30 дней).
-/// </summary>
-public enum StoragePlan
-{
-    FreeTwoWeeks = 0,
-    PaidOneMonth = 1,
-}
-
-public static class StoragePlans
-{
-    public static RetentionPeriod ToRetention(StoragePlan plan) => plan switch
-    {
-        StoragePlan.PaidOneMonth => RetentionPeriod.Month1,
-        _ => RetentionPeriod.TwoWeeks,
-    };
-
-    public static TimeSpan EffectiveLifetime(StoragePlan plan) => RetentionPeriods.Lifetime(ToRetention(plan));
-
-    public static string DisplayName(StoragePlan plan) => plan switch
-    {
-        StoragePlan.PaidOneMonth => "Платный · 1 месяц",
-        _ => "Бесплатный · 2 недели",
-    };
-
-    public static string ShortLabel(StoragePlan plan) => plan switch
-    {
-        StoragePlan.PaidOneMonth => "1 мес",
-        _ => "2 нед",
-    };
-}
-
-/// <summary>
-/// Лимиты облачных тарифов: сколько задачников каждого срока хранения допускает тариф.
-/// 0 — срок недоступен, -1 — без ограничений.
-/// </summary>
-public static class StorageLimits
-{
-    public const int Unlimited = -1;
-    public const string Free = "free";
-    public const string Pro = "pro";
-    public const string ProPlus = "pro_plus";
-
-    public static int LimitFor(string plan, RetentionPeriod retention) => (plan, retention) switch
-    {
-        (Free, RetentionPeriod.Hours48) => 5,
-        (Pro, RetentionPeriod.Hours48) => 20,
-        (Pro, RetentionPeriod.Week1) => 15,
-        (Pro, RetentionPeriod.Month1) => 5,
-        (Pro, RetentionPeriod.Year1) => 1,
-        (ProPlus, RetentionPeriod.Hours48) => Unlimited,
-        (ProPlus, RetentionPeriod.Week1) => Unlimited,
-        (ProPlus, RetentionPeriod.Month1) => Unlimited,
-        (ProPlus, RetentionPeriod.Year1) => 100,
-        (ProPlus, RetentionPeriod.Forever) => 20,
-        _ => 0,
-    };
-
-    public static IReadOnlyList<RetentionPeriod> RetentionsFor(string plan) => plan switch
-    {
-        Pro => [RetentionPeriod.Hours48, RetentionPeriod.Week1, RetentionPeriod.Month1, RetentionPeriod.Year1],
-        ProPlus => [RetentionPeriod.Hours48, RetentionPeriod.Week1, RetentionPeriod.Month1, RetentionPeriod.Year1, RetentionPeriod.Forever],
-        _ => [RetentionPeriod.Hours48],
-    };
-
-    public static string PlanDisplayName(string plan) => plan switch
-    {
-        Pro => "Про",
-        ProPlus => "Про+",
-        _ => "Бесплатный",
     };
 }

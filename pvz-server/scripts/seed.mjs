@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 import fs from "node:fs";
 import path from "node:path";
 import { blob, isBlobBackend } from "../lib/storage.js";
@@ -93,7 +95,7 @@ async function seedDownloads(downloadsDirectory) {
       continue;
     }
     const buffer = fs.readFileSync(file);
-    // Локально сборки читаются прямо из папки downloads — в Blob их дублировать не нужно.
+    // Локально сборки читаются прямо из папки downloads, в Blob их дублировать не нужно.
     if (isBlobBackend())
       await blob().put(`pvz/downloads/${item.fileName}`, buffer, "application/octet-stream");
     index.push({ ...item, sizeBytes: buffer.length, available: true });

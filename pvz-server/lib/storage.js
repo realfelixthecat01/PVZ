@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -13,11 +15,12 @@ fs.mkdirSync(path.join(dataDir, "blobs"), { recursive: true });
 fs.mkdirSync(path.join(dataDir, "uploads"), { recursive: true });
 
 export function isBlobBackend() {
-  // На Vercel Blob-хранилище подключается через OIDC (BLOB_STORE_ID) или read-write токен.
+  // OIDC (BLOB_STORE_ID + VERCEL_OIDC_TOKEN) работает только в сборке на Vercel,
+  // локально остаётся read-write токен.
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
 }
 
-// ---------------------------------------------------------------- state (KV)
+// state (KV)
 
 class LocalKv {
   constructor() {
@@ -121,15 +124,19 @@ class RedisKv {
   }
 
   client() {
-    if (!this.clientPromise) {
-      this.clientPromise = (async () => {
-        const { createClient } = await import("redis");
-        const client = createClient({ url: this.url, socket: { reconnectStrategy: false } });
-        client.on("error", () => {});
-        await client.connect();
-        return client;
-      })();
-    }
+    if (this.clientPromise) return this.clientPromise;
+    const opening = (async () => {
+      const { createClient } = await import("redis");
+      const client = createClient({ url: this.url, socket: { reconnectStrategy: false } });
+      client.on("error", () => {});
+      await client.connect();
+      return client;
+    })();
+    // Упавшее подключение не должно висеть в памяти: при неудаче пробуруем заново.
+    this.clientPromise = opening.catch((error) => {
+      if (this.clientPromise === opening) this.clientPromise = null;
+      throw error;
+    });
     return this.clientPromise;
   }
 
@@ -211,7 +218,7 @@ export async function deleteJson(key) {
   await kv().del(key);
 }
 
-// Глобальная блокировка записи — как семафор в настольном PVZS.
+// Глобальная блокировка записи, как семафор в настольном PVZS.
 const LOCK_TTL_MS = 15000;
 
 export async function withLock(fn) {
@@ -231,7 +238,7 @@ export async function withLock(fn) {
   throw Object.assign(new Error("Сервер занят. Повторите запрос через несколько секунд."), { status: 503 });
 }
 
-// --------------------------------------------------------------- files (blob)
+// файлы (blob)
 
 function localBlobPath(pathname) {
   const normalized = pathname.replace(/\\/g, "/");
@@ -323,7 +330,7 @@ class LocalBlob {
     try {
       fs.unlinkSync(path.join(dataDir, "uploads", uploadId));
     } catch {
-      // нет файла — не беда
+      // нет файла, и ладно
     }
   }
 
@@ -351,7 +358,7 @@ class VercelBlob {
     return this.sdkModule;
   }
 
-  // Read-write токен или OIDC (BLOB_STORE_ID + VERCEL_OIDC_TOKEN) — SDK выбирает сам.
+  // Read-write токен или OIDC (BLOB_STORE_ID + VERCEL_OIDC_TOKEN), SDK выбирает сам.
   authOptions(extra = {}) {
     const options = { ...extra };
     if (this.token) options.token = this.token;
@@ -373,7 +380,12 @@ class VercelBlob {
     const { get } = await this.sdk();
     try {
       const result = await get(pathname, this.authOptions({ access: this.access }));
-      if (!result || result.statusCode !== 200 || !result.stream) return null;
+      if (!result || !result.stream) return null;
+      // Ответ 404 тоже приносит тело: забираем поток, чтобы не держать соединение.
+      if (result.statusCode !== 200) {
+        await result.stream.cancel();
+        return null;
+      }
       return Buffer.from(await new Response(result.stream).arrayBuffer());
     } catch {
       return null;
@@ -427,8 +439,8 @@ class VercelBlob {
       maximumSizeInBytes: maxBytes,
       validUntil: Date.now() + 30 * 60 * 1000,
     }));
-    // addRandomSuffix по умолчанию включён для presigned PUT — без него имя файла
-    // в Blob не совпадёт с pathname, который ждёт сервер.
+    // Суффикс у presigned PUT выключен нарочно: иначе Blob добавит к имени свою
+    // приписку, и pathname не совпадёт с тем, что ожидает сервер.
     const { presignedUrl } = await presignUrl(signed, {
       operation: "put",
       pathname,
@@ -458,7 +470,7 @@ class VercelBlob {
   }
 
   async writeUpload() {
-    throw new Error("Прямая загрузка через функцию недоступна на Vercel — используйте presigned URL.");
+    throw new Error("Прямая загрузка через функцию недоступна на Vercel, используйте presigned URL.");
   }
 
   async removeUpload() {}

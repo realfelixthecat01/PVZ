@@ -1,4 +1,6 @@
-﻿namespace PVZ
+﻿// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
+namespace PVZ
 {
     partial class Form1
     {

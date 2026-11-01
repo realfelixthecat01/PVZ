@@ -1,7 +1,8 @@
 <!DOCTYPE html>
+<!-- Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE. -->
 <html lang="ru">
 <head>
-<title>Панель учителя — Пункт Выдачи Задачек</title>
+<title>Панель учителя | Пункт Выдачи Задачек</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
@@ -120,25 +121,6 @@
   .keys-card { padding: 22px 24px 18px; margin-top: 20px; overflow-x: auto; }
   .keys-card h2 { margin-bottom: 4px; }
   .keys-card > p { font-size: 13.5px; margin-bottom: 0; }
-  .keyform { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 16px 0 6px; }
-  .kf { display: flex; flex-direction: column; gap: 6px; min-width: 150px; }
-  .kf label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  .kf select, .kf input {
-    font: inherit; font-size: 14px; padding: 9px 12px;
-    border: 1px solid var(--border); border-radius: 10px;
-    background: rgba(13, 17, 27, .7); color: var(--ink); outline: none;
-  }
-  .kf select:focus, .kf input:focus { border-color: var(--accent); }
-  .newkey {
-    margin: 14px 0 4px; padding: 14px 16px; border-radius: 12px;
-    border: 1px solid rgba(234, 179, 8, .35); background: rgba(234, 179, 8, .08);
-  }
-  .newkey-label { font-size: 12.5px; color: var(--muted); }
-  .keycode {
-    font-family: Consolas, monospace; font-size: 20px; font-weight: 700;
-    color: #fde047; letter-spacing: .06em; margin: 6px 0 4px; user-select: all;
-  }
-  .newkey-meta { font-size: 12.5px; color: var(--muted); }
   .keys-table { margin-top: 14px; min-width: 640px; }
   .build-list { display: grid; gap: 10px; margin-top: 16px; }
   .build-row {
@@ -174,7 +156,6 @@
   <a class="brand" href="/"><span class="dot"></span>Пункт Выдачи Задачек</a>
   <div class="links">
     <a href="/">Главная</a>
-    <a href="/pricing">Тарифы</a>
     <a href="/cabinet">Кабинет</a>
     <span class="whoami" id="whoami"></span>
   </div>
@@ -184,7 +165,7 @@
   <header class="page">
     <div>
       <h1>Панель учителя</h1>
-      <p class="sub">Каждый задачник хранится в облаке по тарифу. «Продлить» добавляет ещё один срок хранения.</p>
+      <p class="sub">Каждый задачник хранится в облаке. «Продлить» добавляет ещё один срок хранения.</p>
     </div>
     <div class="statusline"><span class="pulse" id="serverPulse"></span><span id="serverStatus">Проверка сервера…</span></div>
   </header>
@@ -193,14 +174,14 @@
 <section class="wrap" id="loginView">
   <div class="card login-card">
     <h2>Вход для учителя</h2>
-    <p>Введите имя аккаунта и пароль. Администратор видит всех учителей и их задачники, учитель — только свои.</p>
+    <p>Введите имя аккаунта и пароль. Администратор видит всех учителей и их задачники, учитель видит только свои.</p>
     <div class="field">
       <input id="identifier" type="text" placeholder="Имя аккаунта или email" autocomplete="username">
       <input id="password" type="password" placeholder="Пароль" autocomplete="current-password">
       <button class="btn primary" id="loginBtn">Войти</button>
     </div>
     <div class="error" id="loginError"></div>
-    <p class="hint">Нет аккаунта? <a href="/register">Зарегистрируйтесь</a> — это займёт минуту.</p>
+    <p class="hint">Нет аккаунта? <a href="/register">Зарегистрируйтесь</a>. Это займёт минуту.</p>
   </div>
 </section>
 
@@ -219,11 +200,11 @@
     <table>
       <thead>
         <tr>
-          <th>Токен</th><th>Учитель</th><th>План</th><th>Загружен</th><th>Истекает</th>
+          <th>Токен</th><th>Учитель</th><th>Загружен</th><th>Истекает</th>
           <th>Задач</th><th>Баллы</th><th>Ученики</th><th></th>
         </tr>
       </thead>
-      <tbody id="rows"><tr><td colspan="9" class="empty">Загрузка…</td></tr></tbody>
+      <tbody id="rows"><tr><td colspan="8" class="empty">Загрузка…</td></tr></tbody>
     </table>
     <div class="error" id="listError" style="padding: 0 12px;"></div>
   </div>
@@ -231,7 +212,7 @@
 
   <div class="card keys-card" id="screensCard" hidden>
     <h2>Экраны учеников</h2>
-    <p>Просмотр экрана начинается по кнопке «Смотреть» и идёт только пока открыт этот раздел. На компьютере ученика видна плашка «Учитель просматривает ваш экран» и кнопка «Остановить» — ученик в любой момент может прекратить показ.</p>
+    <p>Просмотр экрана начинается по кнопке «Смотреть» и идёт только пока открыт этот раздел. На компьютере ученика видна плашка «Учитель просматривает ваш экран» и кнопка «Остановить». Ученик в любой момент может прекратить показ.</p>
     <div class="screen-idle" id="screenIdle"></div>
     <div class="screen-grid" id="screenGrid"><div class="empty">Активных учеников нет.</div></div>
     <div class="error" id="screenError"></div>
@@ -242,70 +223,22 @@
     <p>Все зарегистрированные аккаунты и их активные задачники. Раздел виден только администратору.</p>
     <table class="keys-table">
       <thead>
-        <tr><th>Учитель</th><th>Имя аккаунта</th><th>Email</th><th>Школа</th><th>Тариф</th><th>Активные сессии</th></tr>
+        <tr><th>Учитель</th><th>Имя аккаунта</th><th>Email</th><th>Школа</th><th>Активные сессии</th></tr>
       </thead>
-      <tbody id="teacherRows"><tr><td colspan="6" class="empty">Загрузка…</td></tr></tbody>
+      <tbody id="teacherRows"><tr><td colspan="5" class="empty">Загрузка…</td></tr></tbody>
     </table>
     <div class="error" id="teacherError"></div>
   </div>
 
-  <div class="card keys-card" id="keysCard" hidden>
-    <h2>Ключи активации</h2>
-    <p>Ключ передаётся учителю: он вводит код в личном кабинете и получает тариф хранения или подписку на каталог. Оплата вне сервера — ключ и есть подтверждение.</p>
-    <div class="keyform">
-      <div class="kf">
-        <label for="keyKind">Тип ключа</label>
-        <select id="keyKind">
-          <option value="storage">Тариф хранения</option>
-          <option value="subject">Подписка на предмет</option>
-          <option value="class">Подписка на класс</option>
-          <option value="all">Подписка на все предметы</option>
-        </select>
-      </div>
-      <div class="kf" id="kfPlan">
-        <label for="keyPlan">Тариф</label>
-        <select id="keyPlan">
-          <option value="pro">Про</option>
-          <option value="pro_plus">Про+</option>
-        </select>
-      </div>
-      <div class="kf" id="kfSubject" hidden>
-        <label for="keySubject">Предмет</label>
-        <select id="keySubject">
-          <option value="informatics">Информатика</option>
-          <option value="english">Английский язык</option>
-          <option value="math">Математика</option>
-        </select>
-      </div>
-      <div class="kf" id="kfClass" hidden>
-        <label for="keyClass">Класс</label>
-        <select id="keyClass"></select>
-      </div>
-      <div class="kf">
-        <label for="keyDays">Срок действия, дней</label>
-        <input id="keyDays" type="number" min="1" max="3650" value="30">
-      </div>
-      <button class="btn primary" id="keyCreateBtn">Создать ключ</button>
-    </div>
-    <div class="error" id="keyError"></div>
-    <div class="newkey" id="newKey" hidden></div>
-    <table class="keys-table">
-      <thead>
-        <tr><th>Код</th><th>Тип</th><th>Что включает</th><th>Дней</th><th>Создан</th><th>Статус</th></tr>
-      </thead>
-      <tbody id="keyRows"><tr><td colspan="6" class="empty">Ключей пока нет.</td></tr></tbody>
-    </table>
-  </div>
-
   <div class="card keys-card" id="buildsCard" hidden>
     <h2>Сборки приложений</h2>
-    <p>Скачайте клиент ученика (PVZP) и клиент учителя (PVZT). На Vercel файлы лежат в Blob-хранилище, локально — в папке <code>downloads</code> рядом с сервером (или в <code>PVZ_DOWNLOAD_DIR</code>).</p>
+    <p>Скачайте клиент ученика (PVZP) и клиент учителя (PVZT). На Vercel файлы лежат в Blob-хранилище, локально в папке <code>downloads</code> рядом с сервером (или в <code>PVZ_DOWNLOAD_DIR</code>).</p>
     <div class="build-list" id="buildRows"><div class="empty">Загрузка…</div></div>
     <div class="error" id="buildError"></div>
   </div>
 </section>
 
-<footer class="site">© Пункт Выдачи Задачек · <a href="/pricing">Тарифы</a></footer>
+<footer class="site">© Пункт Выдачи Задачек</footer>
 
 <script>
 (() => {
@@ -316,12 +249,10 @@
   let healthTimer = null;
 
   const fmt = (iso) => {
-    if (!iso) return '—';
+    if (!iso) return '-';
     const d = new Date(iso);
     return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   };
-
-  const fmtDate = (iso) => new Date(iso).toLocaleDateString('ru-RU');
 
   const daysLeft = (iso) => {
     const ms = new Date(iso).getTime() - Date.now();
@@ -390,27 +321,12 @@
     4: '∞',
     5: '2 нед',
   };
-  const RETENTION_TITLE = {
-    0: 'Бесплатный тариф: 48 часов',
-    1: 'Хранение: 1 неделя',
-    2: 'Хранение: 1 месяц',
-    3: 'Хранение: 1 год',
-    4: 'Постоянное хранение',
-    5: 'Бесплатный тариф: 2 недели',
-  };
-
-  const planBadge = (retention) => {
-    const paid = retention !== 0 && retention !== 5;
-    const label = RETENTION[retention] || '2 нед';
-    const title = RETENTION_TITLE[retention] || 'Бесплатный тариф';
-    return '<span class="badge ' + (paid ? 'gold' : 'muted') + '" title="' + title + '">' + label + '</span>';
-  };
 
   const render = (sessions) => {
     renderStats(sessions);
     const rows = $('rows');
     if (!sessions.length) {
-      rows.innerHTML = '<tr><td colspan="9" class="empty">Активных задачников нет. Загрузите задачник из PVZT — он появится здесь.</td></tr>';
+      rows.innerHTML = '<tr><td colspan="8" class="empty">Активных задачников нет. Загрузите задачник из PVZT, он появится здесь.</td></tr>';
       return;
     }
     rows.innerHTML = '';
@@ -421,15 +337,14 @@
             const name = escapeHtml(st.lastName + ' ' + st.firstName);
             const score = st.earnedPoints + '/' + st.maximumPoints;
             const mark = st.isOnline ? '<span class="online">●</span> ' : '';
-            return mark + name + ' — ' + score;
+            return mark + name + ': ' + score;
           }).join('<br>')
-        : '—';
+        : '-';
       const left = daysLeft(s.expiresAt);
       const expires = fmt(s.expiresAt) + (left <= 2 ? ' <span class="expiring">(скоро)</span>' : '');
       tr.innerHTML =
         '<td class="token">' + escapeHtml(s.tokenHint) + '</td>' +
-        '<td>' + (s.ownerName ? escapeHtml(s.ownerName) : '—') + '</td>' +
-        '<td>' + planBadge(s.retention) + '</td>' +
+        '<td>' + (s.ownerName ? escapeHtml(s.ownerName) : '-') + '</td>' +
         '<td>' + fmt(s.uploadedAt) + '</td>' +
         '<td>' + expires + '</td>' +
         '<td>' + s.totalTasks + '</td>' +
@@ -602,96 +517,26 @@
     $('screenGrid').innerHTML = '<div class="empty">Активных учеников нет.</div>';
   };
 
-  const KIND_LABELS = { storage: 'Тариф хранения', subject: 'Подписка на предмет', class: 'Подписка на класс', all: 'Подписка на все предметы' };
-  const PLAN_LABELS = { pro: 'Про', pro_plus: 'Про+' };
-  const SUBJECT_LABELS = { informatics: 'Информатика', english: 'Английский язык', math: 'Математика' };
-  const SUBJECT_MIN_CLASS = { informatics: 6, english: 3, math: 1 };
-
-  const fillClasses = () => {
-    const subject = $('keySubject').value;
-    const min = SUBJECT_MIN_CLASS[subject] || 1;
-    const select = $('keyClass');
-    select.innerHTML = '';
-    for (let value = min; value <= 11; value++) {
-      const option = document.createElement('option');
-      option.value = String(value);
-      option.textContent = value + ' класс';
-      select.appendChild(option);
-    }
-  };
-
-  const syncKeyForm = () => {
-    const kind = $('keyKind').value;
-    $('kfPlan').hidden = kind !== 'storage';
-    $('kfSubject').hidden = kind === 'storage' || kind === 'all';
-    $('kfClass').hidden = kind !== 'class';
-    if (kind === 'subject' || kind === 'class') fillClasses();
-  };
-
-  const keyTarget = (key) => {
-    if (key.kind === 'storage')
-      return 'Тариф «' + (PLAN_LABELS[key.storagePlan] || key.storagePlan) + '»';
-    if (key.kind === 'all')
-      return 'Все предметы';
-    const subject = SUBJECT_LABELS[key.subject] || key.subject;
-    return key.kind === 'class'
-      ? subject + ' · ' + key.classNumber + ' класс'
-      : subject + ' · все классы';
-  };
-
-  const loadKeys = async () => {
-    try {
-      const response = await api('/api/admin/keys');
-      const keys = await response.json();
-      const rows = $('keyRows');
-      if (!keys.length) {
-        rows.innerHTML = '<tr><td colspan="6" class="empty">Ключей пока нет.</td></tr>';
-        return;
-      }
-      rows.innerHTML = keys.map((key) =>
-        '<tr>' +
-          '<td class="token">' + escapeHtml(key.code) + '</td>' +
-          '<td>' + escapeHtml(KIND_LABELS[key.kind] || key.kind) + '</td>' +
-          '<td>' + escapeHtml(keyTarget(key)) + '</td>' +
-          '<td>' + key.durationDays + '</td>' +
-          '<td>' + fmt(key.createdAt) + '</td>' +
-          '<td>' + (key.used
-            ? '<span class="badge muted">Использован</span>'
-            : '<span class="badge success">Готов к выдаче</span>') + '</td>' +
-        '</tr>').join('');
-    } catch (e) {
-      $('keyError').textContent = e.message;
-    }
-  };
-
-  const PLAN_BADGES = {
-    pro: '<span class="badge accent">Про</span>',
-    pro_plus: '<span class="badge gold">Про+</span>',
-    free: '<span class="badge muted">Бесплатный</span>',
-  };
-
   const loadTeachers = async () => {
     try {
       const response = await api('/api/admin/teachers');
       const teachers = await response.json();
       const rows = $('teacherRows');
       if (!teachers.length) {
-        rows.innerHTML = '<tr><td colspan="6" class="empty">Учителей пока нет.</td></tr>';
+        rows.innerHTML = '<tr><td colspan="5" class="empty">Учителей пока нет.</td></tr>';
         return;
       }
       rows.innerHTML = teachers.map((t) => {
-        const until = t.planUntil ? ' <span class="hint">до ' + fmtDate(t.planUntil) + '</span>' : '';
         const sessions = t.sessions.length
           ? t.sessions.map((s) =>
-              escapeHtml(s.tokenHint) + ' · ' + (RETENTION[s.retention] || '—') + ' · ' + s.totalTasks + ' задач'
+              escapeHtml(s.tokenHint) + ' · ' + (RETENTION[s.retention] || '-') + ' · ' + s.totalTasks + ' задач'
             ).join('<br>')
-          : '—';
+          : '-';
         return '<tr>' +
-          '<td>' + escapeHtml(t.fullName || '—') + '</td>' +
+          '<td>' + escapeHtml(t.fullName || '-') + '</td>' +
           '<td class="token">' + escapeHtml(t.username) + '</td>' +
           '<td>' + escapeHtml(t.email) + '</td>' +
-          '<td>' + escapeHtml(t.school || '—') + '</td>' +
-          '<td>' + (PLAN_BADGES[t.plan] || escapeHtml(t.plan)) + until + '</td>' +
+          '<td>' + escapeHtml(t.school || '-') + '</td>' +
           '<td class="students">' + sessions + '</td>' +
         '</tr>';
       }).join('');
@@ -701,7 +546,7 @@
     }
   };
 
-  const BUILD_LABELS = { pvzp: 'PVZP — клиент ученика', pvzt: 'PVZT — клиент учителя' };
+  const BUILD_LABELS = { pvzp: 'PVZP: клиент ученика', pvzt: 'PVZT: клиент учителя' };
   const fmtSize = (bytes) => {
     if (!bytes) return '';
     return bytes >= 1048576
@@ -754,37 +599,6 @@
     }
   };
 
-  const createKey = async () => {
-    $('keyError').textContent = '';
-    const kind = $('keyKind').value;
-    const request = {
-      kind,
-      storagePlan: kind === 'storage' ? $('keyPlan').value : null,
-      durationDays: Number($('keyDays').value) || 0,
-      subject: kind === 'subject' || kind === 'class' ? $('keySubject').value : null,
-      classNumber: kind === 'class' ? Number($('keyClass').value) : null,
-    };
-    $('keyCreateBtn').disabled = true;
-    try {
-      const response = await api('/api/admin/keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-      });
-      const key = await response.json();
-      $('newKey').hidden = false;
-      $('newKey').innerHTML =
-        '<div class="newkey-label">Новый ключ — передайте учителю:</div>' +
-        '<div class="keycode">' + escapeHtml(key.code) + '</div>' +
-        '<div class="newkey-meta">' + escapeHtml(keyTarget(key)) + ' · действует ' + key.durationDays + ' дней</div>';
-      await loadKeys();
-    } catch (e) {
-      $('keyError').textContent = e.message;
-    } finally {
-      $('keyCreateBtn').disabled = false;
-    }
-  };
-
   const start = async () => {
     try {
       const response = await api('/api/account/me');
@@ -797,11 +611,9 @@
     $('loginView').hidden = true;
     $('mainView').hidden = false;
     $('teachersCard').hidden = !isAdmin;
-    $('keysCard').hidden = !isAdmin;
     $('buildsCard').hidden = !isAdmin;
     load();
     if (isAdmin) {
-      loadKeys();
       loadTeachers();
       loadBuilds();
     }
@@ -809,7 +621,6 @@
     timer = setInterval(() => {
       load();
       if (isAdmin) {
-        loadKeys();
         loadTeachers();
         loadBuilds();
       }
@@ -827,7 +638,6 @@
     $('loginView').hidden = false;
     $('whoami').textContent = '';
     $('teachersCard').hidden = true;
-    $('keysCard').hidden = true;
     $('buildsCard').hidden = true;
     $('identifier').value = '';
     $('password').value = '';
@@ -874,11 +684,6 @@
   });
   $('logoutBtn').onclick = () => logout('');
   $('refreshBtn').onclick = () => load();
-  $('keyKind').addEventListener('change', syncKeyForm);
-  $('keySubject').addEventListener('change', fillClasses);
-  $('keyCreateBtn').onclick = createKey;
-  syncKeyForm();
-  fillClasses();
 
   checkHealth();
   healthTimer = setInterval(checkHealth, 30000);

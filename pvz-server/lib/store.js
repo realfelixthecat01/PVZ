@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 import {
   MAX_PACKAGE_BYTES,
   MAX_EXCHANGE_FILE_BYTES,
@@ -11,21 +13,22 @@ import { blob } from "./storage.js";
 import { getJson, setJson, withLock, deleteJson, mgetJson } from "./storage.js";
 import { loadPackage, getTaskMaxScores, getDocumentMaxScore } from "./pvzPackage.js";
 import {
-  planToRetention,
+  RETENTION,
   retentionLifetimeMs,
   normalizeSubject,
   isValidClass,
   catalogPrefix,
   catalogIndexKey,
 } from "./limits.js";
-import { ensureCanStore } from "./accounts.js";
+import { findUserById, GUEST_MAX_SESSIONS } from "./accounts.js";
+import { shortTitle } from "./reporting.js";
 import {
   HttpError,
   InvalidDataError,
-  UnauthorizedError,
   base64Url,
   fixedTimeEqualHex,
   isSessionId,
+  isTokenShaped,
   randomCode,
   randomId,
   sha256Hex,
@@ -39,10 +42,15 @@ import crypto from "node:crypto";
 const SESSIONS_INDEX = "pvz:sessions";
 const sessionKey = (id) => `pvz:session:${id}`;
 const studentKey = (ssid) => `pvz:student:${ssid}`;
+const historyKey = (userId) => `pvz:hist:${userId}`;
+// История ученика: последние задачники с результатами, старое вытесняется.
+const HISTORY_LIMIT = 60;
 const watchKey = (ssid) => `pvz:watch:${ssid}`;
 const frameKey = (ssid) => `pvz:frame:${ssid}`;
 const packagePath = (sessionId) => `pvz/sessions/${sessionId}/taskbook.pvz`;
 const exchangePath = (sessionId, fileId) => `pvz/sessions/${sessionId}/files/${fileId}`;
+// KV чистим с запасом: запись должна пережить свой expiresAt, чтобы её успел
+// разобрать cron и учитель мог посмотреть итоговый отчёт.
 const KV_GRACE_MS = 24 * 60 * 60 * 1000;
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -65,7 +73,7 @@ function clampLifetime(lifetime) {
 }
 
 function sessionRetention(session) {
-  return session.retention ?? planToRetention(session.plan);
+  return session.retention ?? RETENTION.TWO_WEEKS;
 }
 
 function normalizeToken(token) {
@@ -114,7 +122,7 @@ function isActive(session, now = new Date()) {
   return Boolean(expiresAt && expiresAt.getTime() > now.getTime());
 }
 
-// --------------------------------------------------------------- каталог
+// каталог
 
 function validateCatalogClass(subject, classNumber) {
   const normalized = normalizeSubject(subject);
@@ -146,7 +154,7 @@ export async function downloadCatalogTaskbook(subject, classNumber, fileName) {
   return buffer;
 }
 
-// --------------------------------------------------------------- сессии
+// сессии
 
 async function uniqueToken(existingSessions) {
   const taken = new Set(existingSessions.map((session) => session.tokenHash));
@@ -160,10 +168,7 @@ async function uniqueToken(existingSessions) {
 
 async function createSessionFromPackage(packageBuffer, {
   retention,
-  plan = 0,
   ownerUserId = null,
-  enforceQuota = false,
-  principal = null,
   sessionId = randomId(),
   storePackage = true,
 }) {
@@ -174,10 +179,6 @@ async function createSessionFromPackage(packageBuffer, {
 
   return withLock(async () => {
     const sessions = await loadAllSessions();
-    if (principal && enforceQuota) {
-      const usage = countUsage(sessions, principal.userId);
-      await ensureCanStore(principal, retention, usage);
-    }
     const { token, tokenHash } = await uniqueToken(sessions);
     const now = new Date();
     const path = packagePath(sessionId);
@@ -191,11 +192,13 @@ async function createSessionFromPackage(packageBuffer, {
       expiresAt: iso(new Date(now.getTime() + clampLifetime(retentionLifetimeMs(retention)))),
       totalTasks: document.tasks.length,
       maximumPoints: getDocumentMaxScore(document),
-      plan,
       retention,
       ownerUserId,
+      subject: typeof document.subject === "string" ? document.subject : "",
+      classNumber: Number.isInteger(document.classNumber) ? document.classNumber : null,
       packagePath: path,
       taskMaxScores: getTaskMaxScores(document),
+      taskTitles: document.tasks.map((task) => shortTitle(task.description)),
       students: [],
       files: [],
     };
@@ -219,19 +222,13 @@ async function createSessionFromPackage(packageBuffer, {
 
 export async function uploadPackageBuffer(packageBuffer, {
   retention,
-  plan,
   ownerUserId,
-  enforceQuota,
-  principal,
   sessionId,
   packageAlreadyStored = false,
 }) {
   return createSessionFromPackage(packageBuffer, {
     retention,
-    plan,
     ownerUserId,
-    enforceQuota,
-    principal,
     sessionId: sessionId ?? randomId(),
     storePackage: !packageAlreadyStored,
   });
@@ -275,20 +272,20 @@ export function toSessionDto(session, now = new Date()) {
   };
 }
 
-export async function listAllSessions() {
+const uploadedDesc = (a, b) => (parseDate(b.uploadedAt)?.getTime() ?? 0) - (parseDate(a.uploadedAt)?.getTime() ?? 0);
+
+async function listSessions(filter) {
   const now = new Date();
-  const sessions = (await loadAllSessions()).filter((session) => isActive(session, now));
-  return sessions
-    .sort((a, b) => (parseDate(b.uploadedAt)?.getTime() ?? 0) - (parseDate(a.uploadedAt)?.getTime() ?? 0))
-    .map((session) => toSessionDto(session, now));
+  const sessions = (await loadAllSessions()).filter((session) => isActive(session, now) && filter(session));
+  return sessions.sort(uploadedDesc).map((session) => toSessionDto(session, now));
+}
+
+export async function listAllSessions() {
+  return listSessions(() => true);
 }
 
 export async function listOwnedSessions(userId) {
-  const now = new Date();
-  const sessions = (await loadAllSessions()).filter((session) => session.ownerUserId === userId && isActive(session, now));
-  return sessions
-    .sort((a, b) => (parseDate(b.uploadedAt)?.getTime() ?? 0) - (parseDate(a.uploadedAt)?.getTime() ?? 0))
-    .map((session) => toSessionDto(session, now));
+  return listSessions((session) => session.ownerUserId === userId);
 }
 
 function countUsage(sessions, userId, now = new Date()) {
@@ -310,7 +307,7 @@ export async function listOwnerFiles(userId) {
   const now = new Date();
   return (await loadAllSessions())
     .filter((session) => session.ownerUserId === userId && isActive(session, now))
-    .sort((a, b) => (parseDate(b.uploadedAt)?.getTime() ?? 0) - (parseDate(a.uploadedAt)?.getTime() ?? 0))
+    .sort(uploadedDesc)
     .map((session) => ({
       id: session.id,
       tokenHint: session.tokenHint,
@@ -360,6 +357,12 @@ export async function downloadSessionPackage(sessionId, ownerUserId = undefined)
   return blob().getBuffer(session.packagePath ?? packagePath(session.id));
 }
 
+export async function getSessionForReport(principal, sessionId) {
+  const session = await readSession(sessionId);
+  if (!isActive(session) || !canManage(principal, session)) return null;
+  return session;
+}
+
 export async function downloadPackageByToken(token) {
   const tokenHash = sha256Hex(normalizeToken(token));
   const sessions = await loadAllSessions();
@@ -368,9 +371,9 @@ export async function downloadPackageByToken(token) {
   return blob().getBuffer(session.packagePath ?? packagePath(session.id));
 }
 
-// --------------------------------------------------------------- ученики
+// ученики
 
-export async function startStudentSession(token, student) {
+export async function startStudentSession(token, student, accountUserId = null) {
   if (!student || typeof student !== "object") return null;
   const firstName = requireText(student.firstName, 60, "Введите имя.");
   const lastName = requireText(student.lastName, 60, "Введите фамилию.");
@@ -388,6 +391,7 @@ export async function startStudentSession(token, student) {
       firstName,
       lastName,
       className,
+      accountUserId: Number.isInteger(accountUserId) && accountUserId > 0 ? accountUserId : null,
       startedAt: iso(now),
       lastActivityAt: iso(now),
       earnedPoints: new Array(session.totalTasks).fill(0),
@@ -400,7 +404,8 @@ export async function startStudentSession(token, student) {
 }
 
 async function findStudent(ssid) {
-  if (typeof ssid !== "string" || ssid.length === 0) return null;
+  // Идентификатор сессии ученика выдаёт сервер, чужой формат сюда прийти не может.
+  if (!isTokenShaped(ssid)) return null;
   const link = await getJson(studentKey(ssid));
   if (!link) return null;
   const session = await readSession(link.sessionId);
@@ -428,11 +433,56 @@ export async function reportProgress(update) {
     student.completedTasks = update.tasks.map((task) => Boolean(task.completed));
     student.lastActivityAt = iso();
     await writeSession(session);
+    if (student.accountUserId) await upsertStudentHistory(student.accountUserId, session, student);
     return true;
   });
 }
 
-// --------------------------------------------------------------- просмотр экрана
+async function upsertStudentHistory(userId, session, student) {
+  const rows = (await getJson(historyKey(userId))) ?? [];
+  const row = {
+    sessionId: session.id,
+    ssid: student.sessionId,
+    subject: session.subject ?? "",
+    classNumber: session.classNumber ?? null,
+    uploadedAt: session.uploadedAt,
+    startedAt: student.startedAt,
+    updatedAt: iso(),
+    earnedPoints: student.earnedPoints.reduce((sum, value) => sum + value, 0),
+    maximumPoints: session.maximumPoints,
+    completedTasks: student.completedTasks.filter(Boolean).length,
+    totalTasks: session.totalTasks,
+    ownerId: session.ownerUserId ?? null,
+  };
+  const existing = rows.findIndex((item) => item.ssid === row.ssid);
+  if (existing >= 0) rows[existing] = row; else rows.unshift(row);
+  await setJson(historyKey(userId), rows.slice(0, HISTORY_LIMIT));
+}
+
+export async function listStudentHistory(userId) {
+  const rows = (await getJson(historyKey(userId))) ?? [];
+  const ownerIds = [...new Set(rows.map((row) => row.ownerId).filter((id) => id !== null && id !== undefined))];
+  const names = new Map();
+  for (const ownerId of ownerIds) {
+    const owner = await findUserById(ownerId);
+    if (owner) names.set(ownerId, owner.fullName?.trim() ? owner.fullName : owner.username);
+  }
+  return rows
+    .sort((a, b) => (parseDate(b.updatedAt)?.getTime() ?? 0) - (parseDate(a.updatedAt)?.getTime() ?? 0))
+    .map((row) => ({ ...row, teacherName: names.get(row.ownerId) ?? "" }));
+}
+
+export async function assertGuestSessionLimit(ownerUserId) {
+  const owned = (await listOwnedSessions(ownerUserId)).length;
+  if (owned >= GUEST_MAX_SESSIONS) {
+    throw new HttpError(
+      400,
+      "В гостевом режиме активен только один задачник. Закройте его на вкладке «Сервер» и попробуйте снова.",
+    );
+  }
+}
+
+// просмотр экрана
 
 function canManage(principal, session) {
   return Boolean(principal)
@@ -440,7 +490,6 @@ function canManage(principal, session) {
 }
 
 export async function beginScreenWatch(principal, ssid) {
-  if (typeof ssid !== "string" || ssid.length === 0) return false;
   const found = await findStudent(ssid);
   if (!found || !isActive(found.session) || !canManage(principal, found.session)) return false;
   await setJson(watchKey(ssid), { requestedAt: iso() }, SCREEN_WATCH_TIMEOUT_MS);
@@ -494,11 +543,12 @@ export async function storeScreenFrame(ssid, frame) {
 }
 
 export async function stopScreenShare(ssid) {
+  if (!isTokenShaped(ssid)) return;
   await deleteJson(watchKey(ssid));
   await deleteJson(frameKey(ssid));
 }
 
-// --------------------------------------------------------------- пересылка файлов
+// пересылка файлов
 
 function validateExchangeSize(sizeBytes) {
   if (!Number.isInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > MAX_EXCHANGE_FILE_BYTES) {
@@ -546,7 +596,7 @@ async function addExchangeRecord(session, kind, file, studentSessionId, studentN
   validateExchangeSize(file.sizeBytes);
   const total = session.files.reduce((sum, record) => sum + record.sizeBytes, 0);
   if (total + file.sizeBytes > MAX_SESSION_EXCHANGE_BYTES) {
-    throw new InvalidDataError("Лимит файлов задачника — 512 МиБ. Удалите лишние файлы и повторите.");
+    throw new InvalidDataError("Лимит файлов задачника 512 МиБ. Удалите лишние файлы и повторите.");
   }
   const record = {
     id: file.id ?? randomId(),
@@ -615,7 +665,7 @@ export async function deleteSessionFile(principal, sessionId, fileId) {
   });
 }
 
-// --------------------------------------------------------------- очистка
+// очистка
 
 export async function purgeExpired() {
   const removed = [];

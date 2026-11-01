@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [master, Updated-All]
+  pull_request:
+
+jobs:
+  clients:
+    name: Клиенты .NET и интеграционные тесты
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Node.js 22 для pvz-server
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Установка зависимостей сервера
+        run: npm ci --prefix pvz-server
+
+      - name: Сборка решения
+        run: dotnet build PVZ.slnx --configuration Release --nologo
+
+      - name: Интеграционные тесты клиентов против настоящего сервера
+        run: dotnet run --project PVZS.Tests --configuration Release --no-build
+
+  server:
+    name: Сервер pvz-server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: pvz-server/package-lock.json
+
+      - name: Установка зависимостей
+        run: npm ci --prefix pvz-server
+
+      - name: Проверка синтаксиса всех модулей
+        run: |
+          for file in $(find pvz-server/api pvz-server/lib pvz-server/scripts pvz-server/public -name '*.js' -o -name '*.mjs' | sort); do
+            node --check "$file"
+          done
+
+      - name: Копирайт в каждом исходнике
+        run: |
+          missing=0
+          for file in $(git ls-files '*.cs' '*.js' '*.mjs' '*.html' '*.css' | grep -v '^pvz-server/node_modules/'); do
+            head -n 3 "$file" | grep -q 'Copyright ©' || { echo "Без копирайта: $file"; missing=1; }
+          done
+          exit $missing

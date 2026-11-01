@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "PVZS на Node.js: задачники, онлайн-сессии, аккаунты и сайт. Локально — Express, на Vercel — серверная функция с Redis (state) и Blob (файлы).",
+  "description": "Сервер PVZ на Node.js: задачники, онлайн-сессии, аккаунты и сайт. Локально это Express, на Vercel серверная функция, состояние в Redis, файлы в Blob.",
   "main": "index.js",
   "scripts": {
     "start": "node server.js",

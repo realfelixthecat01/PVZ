@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using PVZ.Core;
 using PVZ.Player;
 
@@ -6,17 +8,7 @@ namespace PVZ;
 internal sealed class TeacherOnlineCabinetForm : Form
 {
     private readonly TaskbookDocument _document;
-    private readonly StoragePlan _plan;
     private readonly Label _status = new() { AutoSize = false, Height = 44, ForeColor = PvzTheme.Muted };
-    private readonly Label _planBadge = new()
-    {
-        AutoSize = true,
-        Font = PvzTheme.Caption,
-        ForeColor = PvzTheme.Gold,
-        Text = " ",
-        Padding = new Padding(6, 2, 6, 2),
-        BackColor = Color.FromArgb(48, 42, 18),
-    };
     private readonly TextBox _token = new()
     {
         ReadOnly = true,
@@ -46,11 +38,10 @@ internal sealed class TeacherOnlineCabinetForm : Form
     private string? _sessionId;
     private int _refreshPending;
 
-    private TeacherOnlineCabinetForm(TaskbookDocument document, StoragePlan plan)
+    private TeacherOnlineCabinetForm(TaskbookDocument document)
     {
         PvzFormIcon.TryApply(this);
         _document = document;
-        _plan = plan;
         Text = "Онлайн-задачник";
         StartPosition = FormStartPosition.CenterParent;
         MinimumSize = new Size(760, 600);
@@ -62,12 +53,12 @@ internal sealed class TeacherOnlineCabinetForm : Form
         BuildLayout();
         _refreshTimer.Tick += async (_, _) => await RefreshStudentsAsync(silent: true);
         Shown += async (_, _) => await InitializeAsync();
-        FormClosed += (_, _) => _refreshTimer.Stop();
+        FormClosed += (_, _) => _refreshTimer.Dispose();
     }
 
-    public static void ShowForUpload(IWin32Window owner, TaskbookDocument document, StoragePlan plan)
+    public static void ShowForUpload(IWin32Window owner, TaskbookDocument document)
     {
-        using var form = new TeacherOnlineCabinetForm(document, plan);
+        using var form = new TeacherOnlineCabinetForm(document);
         form.ShowDialog(owner);
     }
 
@@ -77,10 +68,9 @@ internal sealed class TeacherOnlineCabinetForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 8,
+            RowCount = 7,
             Padding = new Padding(20),
         };
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -88,16 +78,6 @@ internal sealed class TeacherOnlineCabinetForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-        _planBadge.Text = "  " + StoragePlans.DisplayName(_plan) + "  ";
-        var badgeRow = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            FlowDirection = FlowDirection.LeftToRight,
-            Margin = new Padding(0, 0, 0, 6),
-        };
-        badgeRow.Controls.Add(_planBadge);
 
         _status.Dock = DockStyle.Top;
         _token.Dock = DockStyle.Top;
@@ -140,7 +120,26 @@ internal sealed class TeacherOnlineCabinetForm : Form
             Font = PvzTheme.Caption,
         };
         _studentsGrid.Dock = DockStyle.Fill;
+        var csvButton = PvzTheme.SecondaryButton("Выгрузить CSV");
+        var statsButton = PvzTheme.SecondaryButton("Статистика");
+        csvButton.AutoSize = false;
+        csvButton.Width = 150;
+        csvButton.Height = 32;
+        statsButton.AutoSize = false;
+        statsButton.Width = 140;
+        statsButton.Height = 32;
+        csvButton.Click += async (_, _) => await ExportResultsCsvAsync();
+        statsButton.Click += async (_, _) => await ShowSessionStatsAsync();
+        var studentsButtons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0, 0, 0, 4),
+        };
+        studentsButtons.Controls.AddRange([csvButton, statsButton]);
         studentsGroup.Controls.Add(_studentsGrid);
+        studentsGroup.Controls.Add(studentsButtons);
         studentsGroup.Controls.Add(studentsNote);
 
         ConfigureFilesGrid();
@@ -178,13 +177,12 @@ internal sealed class TeacherOnlineCabinetForm : Form
         filesGroup.Controls.Add(filesButtons);
         filesGroup.Controls.Add(filesNote);
 
-        root.Controls.Add(badgeRow, 0, 0);
-        root.Controls.Add(_status, 0, 1);
-        root.Controls.Add(_token, 0, 2);
-        root.Controls.Add(tokenRow, 0, 3);
-        root.Controls.Add(_tokenHint, 0, 4);
-        root.Controls.Add(studentsGroup, 0, 5);
-        root.Controls.Add(filesGroup, 0, 6);
+        root.Controls.Add(_status, 0, 0);
+        root.Controls.Add(_token, 0, 1);
+        root.Controls.Add(tokenRow, 0, 2);
+        root.Controls.Add(_tokenHint, 0, 3);
+        root.Controls.Add(studentsGroup, 0, 4);
+        root.Controls.Add(filesGroup, 0, 5);
 
         var close = PvzTheme.GhostButton("Закрыть");
         close.DialogResult = DialogResult.OK;
@@ -197,7 +195,7 @@ internal sealed class TeacherOnlineCabinetForm : Form
             Margin = new Padding(0, 10, 0, 0),
         };
         closeRow.Controls.Add(close);
-        root.Controls.Add(closeRow, 0, 7);
+        root.Controls.Add(closeRow, 0, 6);
 
         AcceptButton = close;
         Controls.Add(root);
@@ -274,7 +272,7 @@ internal sealed class TeacherOnlineCabinetForm : Form
             var expires = result.TokenExpiresAt?.ToLocalTime();
             _tokenHint.Text = expires is null
                 ? "Передайте ученикам этот токен."
-                : $"Передайте ученикам этот токен. Срок хранения: {RetentionPeriods.DisplayName(result.Retention)} — до {expires:dd.MM.yyyy HH:mm}.";
+                : $"Передайте ученикам этот токен. Срок хранения {RetentionPeriods.DisplayName(result.Retention)}, до {expires:dd.MM.yyyy HH:mm}.";
             _status.Text = "Задачник на сервере. Ожидаем учеников…";
             _refreshTimer.Start();
             await RefreshStudentsAsync();
@@ -298,7 +296,7 @@ internal sealed class TeacherOnlineCabinetForm : Form
         if (_accessToken is null || _serverUrl is null)
             return new TaskbookPublishResult { Success = false, ErrorMessage = "Сервер не настроен." };
 
-        var result = await TaskbookPublisher.UploadOnlineAsync(_document, _serverUrl, _accessToken, _plan);
+        var result = await TaskbookPublisher.UploadOnlineAsync(_document, _serverUrl, _accessToken);
         if (result.Success || !result.Unauthorized)
             return result;
 
@@ -306,7 +304,7 @@ internal sealed class TeacherOnlineCabinetForm : Form
         _accessToken = await TeacherServerAuth.EnsureAccessTokenAsync(this, _serverUrl);
         if (_accessToken is null || IsDisposed)
             return new TaskbookPublishResult { Success = false, ErrorMessage = "Вход отменён." };
-        return await TaskbookPublisher.UploadOnlineAsync(_document, _serverUrl, _accessToken, _plan);
+        return await TaskbookPublisher.UploadOnlineAsync(_document, _serverUrl, _accessToken);
     }
 
     private async Task RefreshStudentsAsync(bool silent = false)
@@ -381,7 +379,7 @@ internal sealed class TeacherOnlineCabinetForm : Form
                     _filesGrid.Rows.Add(
                         file.Name,
                         ExchangeFileKinds.DisplayName(file.Kind),
-                        file.StudentName ?? "—",
+                        file.StudentName ?? "-",
                         FormatSize(file.SizeBytes),
                         file.UploadedAt.ToLocalTime().ToString("dd.MM HH:mm"));
                 }
@@ -529,6 +527,69 @@ internal sealed class TeacherOnlineCabinetForm : Form
             _accessToken = null;
         }
         catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException or IOException)
+        {
+            MessageBox.Show(this, ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            if (!IsDisposed)
+                UseWaitCursor = false;
+        }
+    }
+
+    private async Task ExportResultsCsvAsync()
+    {
+        if (_accessToken is null || string.IsNullOrWhiteSpace(_serverUrl) || string.IsNullOrWhiteSpace(_sessionId))
+            return;
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Выгрузить результаты учеников",
+            FileName = $"pvz-rezultaty-{DateTime.Now:yyyy-MM-dd-HHmm}.csv",
+            Filter = "Таблица CSV (*.csv)|*.csv",
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        UseWaitCursor = true;
+        try
+        {
+            var content = await TaskbookOnlineClient.DownloadResultsCsvAsync(_accessToken, _sessionId, _serverUrl);
+            await File.WriteAllBytesAsync(dialog.FileName, content);
+            _status.Text = $"Результаты сохранены в {dialog.FileName}.";
+        }
+        catch (ServerUnauthorizedException)
+        {
+            _accessToken = null;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException
+            or IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            if (!IsDisposed)
+                UseWaitCursor = false;
+        }
+    }
+
+    private async Task ShowSessionStatsAsync()
+    {
+        if (_accessToken is null || string.IsNullOrWhiteSpace(_serverUrl) || string.IsNullOrWhiteSpace(_sessionId))
+            return;
+
+        UseWaitCursor = true;
+        try
+        {
+            var stats = await TaskbookOnlineClient.GetSessionStatsAsync(_accessToken, _sessionId, _serverUrl);
+            TeacherSessionStatsForm.ShowForSession(this, stats);
+        }
+        catch (ServerUnauthorizedException)
+        {
+            _accessToken = null;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
         {
             MessageBox.Show(this, ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }

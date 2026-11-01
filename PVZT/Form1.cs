@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using PVZ.Core;
 using PVZ.Player;
 
@@ -38,6 +40,25 @@ namespace PVZ
         private const string BlankAnswerName = "blankAnswer";
         private const string BlankPointsName = "blankPoints";
         private const string BlankShowName = "blankShow";
+        private const string OptionHeaderName = "optionHeader";
+        private const string OptionTextName = "optionText";
+        private const string OptionCorrectName = "optionCorrect";
+        private const string OptionPointsLabelName = "optionPointsLabel";
+        private const string OptionPointsName = "optionPoints";
+        private const string PairHeaderName = "pairHeader";
+        private const string PairLeftName = "pairLeft";
+        private const string PairRightName = "pairRight";
+        private const string PairPointsLabelName = "pairPointsLabel";
+        private const string PairPointsName = "pairPoints";
+
+        private static readonly TaskbookTaskKind[] ComboKinds =
+        [
+            TaskbookTaskKind.CodeTests,
+            TaskbookTaskKind.FillInBlanks,
+            TaskbookTaskKind.Choice,
+            TaskbookTaskKind.Matching,
+            TaskbookTaskKind.ShortAnswer,
+        ];
 
         private Button _btnLoadTaskbook = null!;
         private ComboBox _kindCombo = null!;
@@ -217,6 +238,9 @@ namespace PVZ
             };
             _kindCombo.Items.Add("Задача с кодом (тесты)");
             _kindCombo.Items.Add("Задание с пропусками «_»");
+            _kindCombo.Items.Add("Выбор ответа (варианты)");
+            _kindCombo.Items.Add("Соответствие (пары)");
+            _kindCombo.Items.Add("Короткий ответ (ввод)");
             _kindCombo.SelectedIndexChanged += (_, _) => OnKindComboChanged();
 
             Controls.Add(_btnAllowedCompilers);
@@ -396,7 +420,9 @@ namespace PVZ
                             checkBox.ForeColor = _mutedColor;
                             break;
                         case Label label:
-                            label.ForeColor = label.Name == BlankHeaderName ? _inkColor : _mutedColor;
+                            label.ForeColor = label.Name is BlankHeaderName or OptionHeaderName or PairHeaderName
+                                ? _inkColor
+                                : _mutedColor;
                             break;
                     }
                 }
@@ -491,10 +517,9 @@ namespace PVZ
 
         private void RebuildTaskTabs()
         {
-            foreach (var tab in _taskTabButtons)
-                tab.Dispose();
+            for (var i = _taskTabsFlow.Controls.Count - 1; i >= 0; i--)
+                _taskTabsFlow.Controls[i].Dispose();
             _taskTabButtons.Clear();
-            _taskTabsFlow.Controls.Clear();
 
             for (var i = 0; i < _tasks.Count; i++)
             {
@@ -508,11 +533,19 @@ namespace PVZ
                     Margin = new Padding(0, 0, 6, 0),
                 };
 
-                var isFillTab = _tasks[i].Kind == TaskbookTaskKind.FillInBlanks;
+                var marker = _tasks[i].Kind switch
+                {
+                    TaskbookTaskKind.FillInBlanks => "_",
+                    TaskbookTaskKind.Choice => "?",
+                    TaskbookTaskKind.Matching => "=",
+                    TaskbookTaskKind.ShortAnswer => "A",
+                    _ => "",
+                };
+                var hasMarker = marker.Length > 0;
                 var tab = new Button
                 {
-                    Text = isFillTab ? $"ЗАДАЧА  {i + 1:00}  _" : $"ЗАДАЧА  {i + 1:00}",
-                    Size = new Size(isFillTab ? 110 : 94, TaskTabRowHeight),
+                    Text = hasMarker ? $"ЗАДАЧА  {i + 1:00}  {marker}" : $"ЗАДАЧА  {i + 1:00}",
+                    Size = new Size(hasMarker ? 110 : 94, TaskTabRowHeight),
                     Margin = new Padding(0),
                     FlatStyle = FlatStyle.Flat,
                     BackColor = _raisedSurfaceColor,
@@ -598,41 +631,81 @@ namespace PVZ
         {
             _suppressUiSync = true;
             var task = _tasks[index];
-            var isFill = task.Kind == TaskbookTaskKind.FillInBlanks;
+            var kind = task.Kind;
 
-            _kindCombo.SelectedIndex = isFill ? 1 : 0;
+            _kindCombo.SelectedIndex = Array.IndexOf(ComboKinds, kind);
 
-            if (isFill)
+            switch (kind)
             {
-                FillBlankRules.SyncBlanks(task.Blanks, task.Description);
-                label1.Text = $"Текст с пропусками «_» · задание №{index + 1}:";
-                textBox1.PlaceholderText = "Напишите текст, а пропуски отмечайте знаком «_»: I _ to school every day.";
-                label2.Text = "ОТВЕТЫ НА ПРОПУСКИ";
-                label4.Text = "Бонус, если все пропуски верны:";
-            }
-            else
-            {
-                label1.Text = $"Условие задачи №{index + 1}:";
-                textBox1.PlaceholderText = "Введите условие задачи...";
-                label2.Text = "ТЕСТОВЫЕ ПРИМЕРЫ";
-                label4.Text = "Бонусные баллы за все тесты:";
+                case TaskbookTaskKind.FillInBlanks:
+                    FillBlankRules.SyncBlanks(task.Blanks, task.Description);
+                    label1.Text = $"Текст с пропусками «_» · задание №{index + 1}:";
+                    textBox1.PlaceholderText = "Напишите текст, а пропуски отмечайте знаком «_»: I _ to school every day.";
+                    label2.Text = "ОТВЕТЫ НА ПРОПУСКИ";
+                    label4.Text = "Бонус, если все пропуски верны:";
+                    break;
+                case TaskbookTaskKind.Choice:
+                    label1.Text = $"Вопрос с вариантами №{index + 1}:";
+                    textBox1.PlaceholderText = "Введите вопрос...";
+                    label2.Text = "ВАРИАНТЫ ОТВЕТА";
+                    label4.Text = "Бонус за полностью верный ответ:";
+                    break;
+                case TaskbookTaskKind.Matching:
+                    label1.Text = $"Задание на соответствие №{index + 1}:";
+                    textBox1.PlaceholderText = "Напишите общую инструкцию: Соотнесите слова и переводы...";
+                    label2.Text = "ПАРЫ (ЛЕВОЕ = ПРАВОЕ)";
+                    label4.Text = "Бонус, если все пары верны:";
+                    break;
+                case TaskbookTaskKind.ShortAnswer:
+                    if (task.Blanks.Count == 0)
+                        task.Blanks.Add(new FillBlankDto());
+                    label1.Text = $"Вопрос с коротким ответом №{index + 1}:";
+                    textBox1.PlaceholderText = "Введите вопрос: Сколько будет 7 умножить на 8?";
+                    label2.Text = "ПРАВИЛЬНЫЙ ОТВЕТ";
+                    label4.Text = "Бонус за верный ответ:";
+                    break;
+                default:
+                    label1.Text = $"Условие задачи №{index + 1}:";
+                    textBox1.PlaceholderText = "Введите условие задачи...";
+                    label2.Text = "ТЕСТОВЫЕ ПРИМЕРЫ";
+                    label4.Text = "Бонусные баллы за все тесты:";
+                    break;
             }
 
-            button2.Visible = !isFill;
+            button2.Visible = kind is not (TaskbookTaskKind.FillInBlanks or TaskbookTaskKind.ShortAnswer);
+            button2.Text = kind switch
+            {
+                TaskbookTaskKind.Choice => "+  Добавить вариант",
+                TaskbookTaskKind.Matching => "+  Добавить пару",
+                _ => "+  Добавить тест",
+            };
+
             textBox1.Text = task.Description;
             textBox5.Text = task.BonusPointsForAllTests.ToString();
 
             _testsFlow.SuspendLayout();
             _testsFlow.Controls.Clear();
-            if (isFill)
+            switch (kind)
             {
-                for (var i = 0; i < task.Blanks.Count; i++)
-                    _testsFlow.Controls.Add(CreateBlankPanel(task.Blanks[i], i));
-            }
-            else
-            {
-                foreach (var test in task.Tests)
-                    _testsFlow.Controls.Add(CreateTestPanel(test));
+                case TaskbookTaskKind.FillInBlanks:
+                    for (var i = 0; i < task.Blanks.Count; i++)
+                        _testsFlow.Controls.Add(CreateBlankPanel(task.Blanks[i], i));
+                    break;
+                case TaskbookTaskKind.Choice:
+                    for (var i = 0; i < task.Options.Count; i++)
+                        _testsFlow.Controls.Add(CreateOptionPanel(task.Options[i], i));
+                    break;
+                case TaskbookTaskKind.Matching:
+                    for (var i = 0; i < task.Pairs.Count; i++)
+                        _testsFlow.Controls.Add(CreatePairPanel(task.Pairs[i], i));
+                    break;
+                case TaskbookTaskKind.ShortAnswer:
+                    _testsFlow.Controls.Add(CreateBlankPanel(task.Blanks[0], 0, "ОТВЕТ"));
+                    break;
+                default:
+                    foreach (var test in task.Tests)
+                        _testsFlow.Controls.Add(CreateTestPanel(test));
+                    break;
             }
             _testsFlow.ResumeLayout(true);
             LayoutTestPanels();
@@ -650,16 +723,27 @@ namespace PVZ
             task.Description = textBox1.Text;
             task.BonusPointsForAllTests = ParseIntOrDefault(textBox5.Text, task.BonusPointsForAllTests);
 
-            if (task.Kind == TaskbookTaskKind.FillInBlanks)
+            switch (task.Kind)
             {
-                task.Blanks.Clear();
-                foreach (Control control in _testsFlow.Controls)
-                {
-                    if (control is Panel panel && panel.Tag is FillBlankDto blank)
-                        task.Blanks.Add(blank);
-                }
-                FillBlankRules.SyncBlanks(task.Blanks, task.Description);
-                return;
+                case TaskbookTaskKind.FillInBlanks:
+                    task.Blanks.Clear();
+                    CollectPanels(task.Blanks);
+                    FillBlankRules.SyncBlanks(task.Blanks, task.Description);
+                    return;
+                case TaskbookTaskKind.Choice:
+                    task.Options.Clear();
+                    CollectPanels(task.Options);
+                    return;
+                case TaskbookTaskKind.Matching:
+                    task.Pairs.Clear();
+                    CollectPanels(task.Pairs);
+                    return;
+                case TaskbookTaskKind.ShortAnswer:
+                    var answers = new List<FillBlankDto>();
+                    CollectPanels(answers);
+                    task.Blanks.Clear();
+                    task.Blanks.Add(answers.Count > 0 ? answers[0] : new FillBlankDto());
+                    return;
             }
 
             task.Tests.Clear();
@@ -670,6 +754,15 @@ namespace PVZ
                     ReadTestFromPanel(panel, test);
                     task.Tests.Add(test);
                 }
+            }
+        }
+
+        private void CollectPanels<T>(List<T> target) where T : class
+        {
+            foreach (Control control in _testsFlow.Controls)
+            {
+                if (control is Panel panel && panel.Tag is T item)
+                    target.Add(item);
             }
         }
 
@@ -700,15 +793,36 @@ namespace PVZ
 
         private void AddTestToCurrentTask()
         {
-            if (_tasks[_currentTaskIndex].Kind == TaskbookTaskKind.FillInBlanks)
-                return;
+            var task = _tasks[_currentTaskIndex];
+            Control added;
+            switch (task.Kind)
+            {
+                case TaskbookTaskKind.FillInBlanks:
+                case TaskbookTaskKind.ShortAnswer:
+                    return;
+                case TaskbookTaskKind.Choice:
+                    SaveCurrentTaskFromUi();
+                    var option = new ChoiceOptionDto();
+                    task.Options.Add(option);
+                    added = CreateOptionPanel(option, task.Options.Count - 1);
+                    break;
+                case TaskbookTaskKind.Matching:
+                    SaveCurrentTaskFromUi();
+                    var pair = new MatchPairDto();
+                    task.Pairs.Add(pair);
+                    added = CreatePairPanel(pair, task.Pairs.Count - 1);
+                    break;
+                default:
+                    SaveCurrentTaskFromUi();
+                    var test = new TestCaseDto();
+                    task.Tests.Add(test);
+                    added = CreateTestPanel(test);
+                    break;
+            }
 
-            SaveCurrentTaskFromUi();
-            var test = new TestCaseDto();
-            _tasks[_currentTaskIndex].Tests.Add(test);
-            _testsFlow.Controls.Add(CreateTestPanel(test));
+            _testsFlow.Controls.Add(added);
             LayoutTestPanels();
-            _testsFlow.ScrollControlIntoView(_testsFlow.Controls[^1]);
+            _testsFlow.ScrollControlIntoView(added);
         }
 
         private void ScheduleLayoutTestPanels()
@@ -758,6 +872,18 @@ namespace PVZ
                     continue;
                 }
 
+                if (panel.Tag is ChoiceOptionDto)
+                {
+                    ApplyOptionPanelWidths(panel);
+                    continue;
+                }
+
+                if (panel.Tag is MatchPairDto)
+                {
+                    ApplyPairPanelWidths(panel);
+                    continue;
+                }
+
                 Button? removeButton = null;
                 TextBox? inputBox = null;
                 TextBox? outputBox = null;
@@ -800,20 +926,46 @@ namespace PVZ
             }
         }
 
-        private void RemoveTestPanel(Panel panel, TestCaseDto test)
+        private void RemoveItemPanel(Panel panel)
         {
             var task = _tasks[_currentTaskIndex];
-            if (task.Tests.Count <= 1)
+            switch (panel.Tag)
             {
-                MessageBox.Show("Нельзя удалить последний тест.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
+                case TestCaseDto test:
+                    if (task.Tests.Count <= 1)
+                    {
+                        MessageBox.Show("Нельзя удалить последний тест.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+                    SaveCurrentTaskFromUi();
+                    task.Tests.Remove(test);
+                    break;
+                case ChoiceOptionDto option:
+                    if (task.Options.Count <= 2)
+                    {
+                        MessageBox.Show("Нужно хотя бы два варианта ответа.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+                    SaveCurrentTaskFromUi();
+                    task.Options.Remove(option);
+                    break;
+                case MatchPairDto pair:
+                    if (task.Pairs.Count <= 2)
+                    {
+                        MessageBox.Show("Нужно хотя бы две пары.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+                    SaveCurrentTaskFromUi();
+                    task.Pairs.Remove(pair);
+                    break;
+                default:
+                    // Пропуски и короткий ответ существуют по одному на задание и не удаляются.
+                    return;
             }
 
-            SaveCurrentTaskFromUi();
-            task.Tests.Remove(test);
             _testsFlow.Controls.Remove(panel);
             panel.Dispose();
-            LayoutTestPanels();
+            LoadTaskToUi(_currentTaskIndex);
         }
 
         private Panel CreateTestPanel(TestCaseDto test)
@@ -840,7 +992,7 @@ namespace PVZ
                 Cursor = Cursors.Hand,
             };
             remove.FlatAppearance.BorderSize = 0;
-            remove.Click += (_, _) => RemoveTestPanel(panel, test);
+            remove.Click += (_, _) => RemoveItemPanel(panel);
 
             var inputLabel = new Label
             {
@@ -960,26 +1112,51 @@ namespace PVZ
             if (_suppressUiSync || _currentTaskIndex < 0 || _currentTaskIndex >= _tasks.Count)
                 return;
 
+            var comboIndex = _kindCombo.SelectedIndex;
+            if (comboIndex < 0 || comboIndex >= ComboKinds.Length)
+                return;
+
             SaveCurrentTaskFromUi();
             var task = _tasks[_currentTaskIndex];
-            var kind = _kindCombo.SelectedIndex == 1
-                ? TaskbookTaskKind.FillInBlanks
-                : TaskbookTaskKind.CodeTests;
-
+            var kind = ComboKinds[comboIndex];
             if (task.Kind == kind)
                 return;
 
             task.Kind = kind;
-            if (kind == TaskbookTaskKind.FillInBlanks)
-                FillBlankRules.SyncBlanks(task.Blanks, task.Description);
-            else if (task.Tests.Count == 0)
-                task.Tests.Add(new TestCaseDto());
+            switch (kind)
+            {
+                case TaskbookTaskKind.FillInBlanks:
+                    FillBlankRules.SyncBlanks(task.Blanks, task.Description);
+                    break;
+                case TaskbookTaskKind.Choice:
+                    if (task.Options.Count == 0)
+                    {
+                        task.Options.Add(new ChoiceOptionDto { Correct = true });
+                        task.Options.Add(new ChoiceOptionDto());
+                    }
+                    break;
+                case TaskbookTaskKind.Matching:
+                    if (task.Pairs.Count == 0)
+                    {
+                        task.Pairs.Add(new MatchPairDto());
+                        task.Pairs.Add(new MatchPairDto());
+                    }
+                    break;
+                case TaskbookTaskKind.ShortAnswer:
+                    if (task.Blanks.Count == 0)
+                        task.Blanks.Add(new FillBlankDto());
+                    break;
+                default:
+                    if (task.Tests.Count == 0)
+                        task.Tests.Add(new TestCaseDto());
+                    break;
+            }
 
             RebuildTaskTabs();
             LoadTaskToUi(_currentTaskIndex);
         }
 
-        private Panel CreateBlankPanel(FillBlankDto blank, int index)
+        private Panel CreateBlankPanel(FillBlankDto blank, int index, string? headerText = null)
         {
             var panel = new Panel
             {
@@ -993,7 +1170,7 @@ namespace PVZ
             var header = new Label
             {
                 Name = BlankHeaderName,
-                Text = $"ПРОПУСК  {index + 1:00}",
+                Text = headerText ?? $"ПРОПУСК  {index + 1:00}",
                 AutoSize = true,
                 Font = new Font("Segoe UI", 8F, FontStyle.Bold),
                 ForeColor = _inkColor,
@@ -1165,6 +1342,267 @@ namespace PVZ
             return combined.Length > 52 ? combined[..52] + "…" : combined;
         }
 
+        private Button CreatePanelRemoveButton()
+        {
+            var remove = new Button
+            {
+                Text = "×",
+                Tag = TestRemoveButtonTag,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Size = new Size(22, 22),
+                TabStop = false,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = _raisedSurfaceColor,
+                ForeColor = _mutedColor,
+                Cursor = Cursors.Hand,
+            };
+            remove.FlatAppearance.BorderSize = 0;
+            return remove;
+        }
+
+        private Panel CreateOptionPanel(ChoiceOptionDto option, int index)
+        {
+            var panel = new Panel
+            {
+                BorderStyle = BorderStyle.FixedSingle,
+                Size = new Size(220, 82),
+                BackColor = _surfaceColor,
+                Margin = new Padding(0, 0, 0, 6),
+                Tag = option,
+            };
+
+            var header = new Label
+            {
+                Name = OptionHeaderName,
+                Text = $"ВАРИАНТ  {index + 1:00}",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8F, FontStyle.Bold),
+                ForeColor = _inkColor,
+                Location = new Point(5, 4),
+            };
+            var remove = CreatePanelRemoveButton();
+            remove.Click += (_, _) => RemoveItemPanel(panel);
+
+            var text = new TextBox
+            {
+                Name = OptionTextName,
+                PlaceholderText = "Текст варианта",
+                Location = new Point(4, 21),
+                Size = new Size(212, 23),
+                Text = option.Text,
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = _surfaceColor,
+                ForeColor = _inkColor,
+            };
+            var correct = new CheckBox
+            {
+                Name = OptionCorrectName,
+                Text = "Верный",
+                AutoSize = true,
+                ForeColor = _mutedColor,
+                Checked = option.Correct,
+                Location = new Point(4, 52),
+            };
+            var pointsLabel = new Label
+            {
+                Name = OptionPointsLabelName,
+                Text = "Баллы:",
+                AutoSize = true,
+                ForeColor = _mutedColor,
+                Location = new Point(92, 55),
+            };
+            var points = new TextBox
+            {
+                Name = OptionPointsName,
+                PlaceholderText = "25",
+                Location = new Point(140, 52),
+                Size = new Size(38, 23),
+                Text = option.Points > 0 ? option.Points.ToString() : "",
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = _surfaceColor,
+                ForeColor = _inkColor,
+            };
+
+            void Bind()
+            {
+                option.Text = text.Text;
+                option.Correct = correct.Checked;
+                option.Points = ParseIntOrDefault(points.Text, 25);
+            }
+
+            text.TextChanged += (_, _) => Bind();
+            correct.CheckedChanged += (_, _) => Bind();
+            points.TextChanged += (_, _) => Bind();
+
+            panel.Controls.Add(header);
+            panel.Controls.Add(text);
+            panel.Controls.Add(correct);
+            panel.Controls.Add(pointsLabel);
+            panel.Controls.Add(points);
+            panel.Controls.Add(remove);
+
+            return panel;
+        }
+
+        private Panel CreatePairPanel(MatchPairDto pair, int index)
+        {
+            var panel = new Panel
+            {
+                BorderStyle = BorderStyle.FixedSingle,
+                Size = new Size(220, 82),
+                BackColor = _surfaceColor,
+                Margin = new Padding(0, 0, 0, 6),
+                Tag = pair,
+            };
+
+            var header = new Label
+            {
+                Name = PairHeaderName,
+                Text = $"ПАРА  {index + 1:00}",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8F, FontStyle.Bold),
+                ForeColor = _inkColor,
+                Location = new Point(5, 4),
+            };
+            var remove = CreatePanelRemoveButton();
+            remove.Click += (_, _) => RemoveItemPanel(panel);
+
+            var left = new TextBox
+            {
+                Name = PairLeftName,
+                PlaceholderText = "Левое",
+                Location = new Point(4, 21),
+                Size = new Size(102, 23),
+                Text = pair.Left,
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = _surfaceColor,
+                ForeColor = _inkColor,
+            };
+            var right = new TextBox
+            {
+                Name = PairRightName,
+                PlaceholderText = "Правое",
+                Location = new Point(112, 21),
+                Size = new Size(104, 23),
+                Text = pair.Right,
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = _surfaceColor,
+                ForeColor = _inkColor,
+            };
+            var pointsLabel = new Label
+            {
+                Name = PairPointsLabelName,
+                Text = "Баллы:",
+                AutoSize = true,
+                ForeColor = _mutedColor,
+                Location = new Point(4, 55),
+            };
+            var points = new TextBox
+            {
+                Name = PairPointsName,
+                PlaceholderText = "25",
+                Location = new Point(52, 52),
+                Size = new Size(38, 23),
+                Text = pair.Points > 0 ? pair.Points.ToString() : "",
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = _surfaceColor,
+                ForeColor = _inkColor,
+            };
+
+            void Bind()
+            {
+                pair.Left = left.Text;
+                pair.Right = right.Text;
+                pair.Points = ParseIntOrDefault(points.Text, 25);
+            }
+
+            left.TextChanged += (_, _) => Bind();
+            right.TextChanged += (_, _) => Bind();
+            points.TextChanged += (_, _) => Bind();
+
+            panel.Controls.Add(header);
+            panel.Controls.Add(left);
+            panel.Controls.Add(right);
+            panel.Controls.Add(pointsLabel);
+            panel.Controls.Add(points);
+            panel.Controls.Add(remove);
+
+            return panel;
+        }
+
+        private void ApplyOptionPanelWidths(Panel panel)
+        {
+            var width = panel.Width;
+            Button? remove = null;
+            foreach (Control child in panel.Controls)
+            {
+                if (child is Button button && (string?)button.Tag == TestRemoveButtonTag)
+                    remove = button;
+            }
+            remove?.Location = new Point(width - remove.Width - 3, 2);
+
+            foreach (Control child in panel.Controls)
+            {
+                switch (child.Name)
+                {
+                    case OptionTextName:
+                        child.SetBounds(4, 21, Math.Max(60, width - 14), 23);
+                        break;
+                    case OptionCorrectName:
+                        child.Location = new Point(4, 52);
+                        break;
+                    case OptionPointsLabelName:
+                        child.Left = Math.Max(100, width - TestCloseButtonReserve - child.Width - 42);
+                        break;
+                    case OptionPointsName:
+                        child.Left = Math.Max(140, width - TestCloseButtonReserve - child.Width - 4);
+                        break;
+                }
+            }
+        }
+
+        private void ApplyPairPanelWidths(Panel panel)
+        {
+            var width = panel.Width;
+            Button? remove = null;
+            foreach (Control child in panel.Controls)
+            {
+                if (child is Button button && (string?)button.Tag == TestRemoveButtonTag)
+                    remove = button;
+            }
+            remove?.Location = new Point(width - remove.Width - 3, 2);
+
+            TextBox? left = null;
+            foreach (Control child in panel.Controls)
+            {
+                switch (child.Name)
+                {
+                    case PairLeftName:
+                        child.SetBounds(4, 21, Math.Max(40, (width - 18) / 2), 23);
+                        left = (TextBox)child;
+                        break;
+                    case PairRightName:
+                        child.SetBounds(0, 21, 104, 23);
+                        break;
+                    case PairPointsLabelName:
+                        child.Location = new Point(4, 55);
+                        break;
+                    case PairPointsName:
+                        child.Location = new Point(52, 52);
+                        break;
+                }
+            }
+
+            if (left != null)
+            {
+                foreach (Control child in panel.Controls)
+                {
+                    if (child.Name == PairRightName)
+                        child.SetBounds(left.Right + 6, 21, Math.Max(40, width - left.Right - 14), 23);
+                }
+            }
+        }
+
         private void OnLoadTaskbook()
         {
             using var dialog = new OpenFileDialog
@@ -1220,15 +1658,49 @@ namespace PVZ
                         Points = blank.Points,
                         ShowToStudent = blank.ShowToStudent,
                     }).ToList(),
+                    Options = task.Options.Select(option => new ChoiceOptionDto
+                    {
+                        Text = option.Text,
+                        Correct = option.Correct,
+                        Points = option.Points,
+                    }).ToList(),
+                    Pairs = task.Pairs.Select(pair => new MatchPairDto
+                    {
+                        Left = pair.Left,
+                        Right = pair.Right,
+                        Points = pair.Points,
+                    }).ToList(),
                 };
 
-                if (copy.Kind == TaskbookTaskKind.FillInBlanks)
+                switch (copy.Kind)
                 {
-                    FillBlankRules.SyncBlanks(copy.Blanks, copy.Description);
-                }
-                else if (copy.Tests.Count == 0)
-                {
-                    copy.Tests.Add(new TestCaseDto());
+                    case TaskbookTaskKind.FillInBlanks:
+                        FillBlankRules.SyncBlanks(copy.Blanks, copy.Description);
+                        break;
+                    case TaskbookTaskKind.Choice:
+                        if (copy.Options.Count == 0)
+                        {
+                            copy.Options.Add(new ChoiceOptionDto { Correct = true });
+                            copy.Options.Add(new ChoiceOptionDto());
+                        }
+                        break;
+                    case TaskbookTaskKind.Matching:
+                        if (copy.Pairs.Count == 0)
+                        {
+                            copy.Pairs.Add(new MatchPairDto());
+                            copy.Pairs.Add(new MatchPairDto());
+                        }
+                        break;
+                    case TaskbookTaskKind.ShortAnswer:
+                        if (copy.Blanks.Count == 0)
+                            copy.Blanks.Add(new FillBlankDto());
+                        else if (copy.Blanks.Count > 1)
+                            copy.Blanks.RemoveRange(1, copy.Blanks.Count - 1);
+                        break;
+                    default:
+                        if (copy.Tests.Count == 0)
+                            copy.Tests.Add(new TestCaseDto());
+                        break;
                 }
 
                 _tasks.Add(copy);
@@ -1240,13 +1712,13 @@ namespace PVZ
             checkBox5.Checked = document.KillExplorer;
             _allowedCompilers = document.AllowedCompilers;
             textBox4.Clear();
-            textBox4.PlaceholderText = "Пароль из файла недоступен — задайте заново";
+            textBox4.PlaceholderText = "Пароль из файла недоступен, задайте заново";
             _currentTaskIndex = 0;
             RebuildTaskTabs();
             LoadTaskToUi(0);
             MessageBox.Show(
                 this,
-                "Задачник загружен. Пароль преподавателя в .pvz не хранится в открытом виде — укажите его снова перед сохранением.",
+                "Задачник загружен. Пароль преподавателя в .pvz не хранится в открытом виде, укажите его снова перед сохранением.",
                 Text,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -1271,34 +1743,82 @@ namespace PVZ
             for (var i = 0; i < _tasks.Count; i++)
             {
                 var task = _tasks[i];
-                if (task.Kind == TaskbookTaskKind.FillInBlanks)
+                var title = $"В задании №{i + 1}";
+                switch (task.Kind)
                 {
-                    if (FillBlankRules.CountBlanks(task.Description) == 0)
-                    {
-                        MessageBox.Show($"В задании №{i + 1} нет ни одного пропуска «_». Отметьте пропуски подчёркиванием.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        return;
-                    }
+                    case TaskbookTaskKind.FillInBlanks:
+                        if (FillBlankRules.CountBlanks(task.Description) == 0)
+                        {
+                            MessageBox.Show($"{title} нет ни одного пропуска «_». Отметьте пропуски подчёркиванием.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
 
-                    if (task.Blanks.Any(blank => string.IsNullOrWhiteSpace(blank.Answer)))
-                    {
-                        MessageBox.Show($"В задании №{i + 1} у каждого пропуска «_» должен быть указан ответ.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        return;
-                    }
-                }
-                else if (task.Tests.Count == 0)
-                {
-                    MessageBox.Show($"У задачи №{i + 1} должен быть хотя бы один тест.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
+                        if (task.Blanks.Any(blank => string.IsNullOrWhiteSpace(blank.Answer)))
+                        {
+                            MessageBox.Show($"{title} у каждого пропуска «_» должен быть указан ответ.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+                        break;
+                    case TaskbookTaskKind.Choice:
+                        if (task.Options.Count < 2)
+                        {
+                            MessageBox.Show($"{title} нужно хотя бы два варианта ответа.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+
+                        if (task.Options.Any(option => string.IsNullOrWhiteSpace(option.Text)))
+                        {
+                            MessageBox.Show($"{title} у каждого варианта должен быть текст.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+
+                        if (!task.Options.Any(option => option.Correct))
+                        {
+                            MessageBox.Show($"{title} отметьте галочкой хотя бы один верный вариант.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+                        break;
+                    case TaskbookTaskKind.Matching:
+                        if (task.Pairs.Count < 2)
+                        {
+                            MessageBox.Show($"{title} нужно хотя бы две пары.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+
+                        if (task.Pairs.Any(pair => string.IsNullOrWhiteSpace(pair.Left) || string.IsNullOrWhiteSpace(pair.Right)))
+                        {
+                            MessageBox.Show($"{title} заполните обе части каждой пары.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+                        break;
+                    case TaskbookTaskKind.ShortAnswer:
+                        if (task.Blanks.All(blank => string.IsNullOrWhiteSpace(blank.Answer)))
+                        {
+                            MessageBox.Show($"{title} укажите правильный ответ.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+                        break;
+                    default:
+                        if (task.Tests.Count == 0)
+                        {
+                            MessageBox.Show($"У задачи №{i + 1} должен быть хотя бы один тест.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+                        break;
                 }
             }
 
-            var isFillTaskbook = _tasks[0].Kind == TaskbookTaskKind.FillInBlanks;
-            var subject = isFillTaskbook ? TaskbookCatalogSubjects.English : TaskbookCatalogSubjects.Informatics;
-            var classNumber = isFillTaskbook ? 5 : 6;
+            var firstKind = _tasks[0].Kind;
+            var subject = firstKind is TaskbookTaskKind.FillInBlanks or TaskbookTaskKind.Matching
+                ? TaskbookCatalogSubjects.English
+                : firstKind == TaskbookTaskKind.ShortAnswer
+                    ? TaskbookCatalogSubjects.Math
+                    : TaskbookCatalogSubjects.Informatics;
+            var classNumber = subject == TaskbookCatalogSubjects.Informatics ? 6 : 5;
             if (!TaskbookDetailsDialog.TryChoose(this, subject, classNumber, out subject, out classNumber))
                 return;
 
-            if (!BuilderSettingsDialogs.TryPickDeliveryMode(this, out var online, out var plan))
+            if (!BuilderSettingsDialogs.TryPickDeliveryMode(this, out var mode))
                 return;
 
             var document = TaskbookPublisher.CreateDocument(
@@ -1312,20 +1832,25 @@ namespace PVZ
             document.Subject = subject;
             document.ClassNumber = classNumber;
 
-            if (online)
+            if (mode == TaskbookDeliveryMode.Online)
             {
-                TeacherOnlineCabinetForm.ShowForUpload(this, document, plan);
+                TeacherOnlineCabinetForm.ShowForUpload(this, document);
                 return;
             }
 
+            bool buildExecutable = mode == TaskbookDeliveryMode.OfflineExecutable;
             using var dlg = new SaveFileDialog
             {
-                Filter = "Задачник PVZ (*.pvz)|*.pvz",
-                DefaultExt = "pvz",
+                Filter = buildExecutable
+                    ? "Исполняемый файл PVZ (*.exe)|*.exe"
+                    : "Задачник PVZ (*.pvz)|*.pvz",
+                DefaultExt = buildExecutable ? "exe" : "pvz",
                 AddExtension = true,
-                FileName = "Задачник.pvz",
+                FileName = buildExecutable ? "Задачник.exe" : "Задачник.pvz",
                 InitialDirectory = TaskbookUserFolders.ProjectsPath,
-                Title = "Сохранить оффлайн-задачник в Документы\\PVZ\\projects",
+                Title = buildExecutable
+                    ? "Собрать задачник одним .exe в Документы\\PVZ\\projects"
+                    : "Сохранить оффлайн-задачник в Документы\\PVZ\\projects",
             };
             if (dlg.ShowDialog() != DialogResult.OK)
                 return;
@@ -1334,7 +1859,9 @@ namespace PVZ
             Enabled = false;
             try
             {
-                var result = await Task.Run(() => TaskbookPublisher.PublishPackage(dlg.FileName, document));
+                var result = buildExecutable
+                    ? await TaskbookPublisher.PublishExeAsync(dlg.FileName, document)
+                    : await Task.Run(() => TaskbookPublisher.PublishPackage(dlg.FileName, document));
                 if (!result.Success)
                 {
                     MessageBox.Show(result.ErrorMessage ?? "Не удалось подготовить задачник.", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -1342,10 +1869,17 @@ namespace PVZ
                 }
 
                 MessageBox.Show(
-                    $"Файл .pvz сжат и снабжён контрольной суммой, но не зашифрован. Передайте файл ученику для оффлайн-открытия; пароль преподавателя не нужен ученику и остаётся только у вас.\n\n{result.OutputPath}",
+                    (buildExecutable
+                        ? "Задачник собран одним файлом: ученику достаточно запустить его, PVZP ему не нужен. Внутри задачник не зашифрован, а Python и PascalABC.NET должны стоять на компьютере ученика."
+                        : "Файл .pvz сжат и снабжён контрольной суммой, но не зашифрован. Передайте файл ученику для оффлайн-открытия; пароль преподавателя не нужен ученику и остаётся только у вас.")
+                    + $"\n\n{result.OutputExePath ?? result.OutputPath}",
                     Text,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                MessageBox.Show(this, $"Не удалось подготовить задачник:\n{ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
