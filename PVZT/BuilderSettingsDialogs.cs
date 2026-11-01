@@ -1,11 +1,20 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using PVZ.Core;
 using PVZ.Player;
 
 namespace PVZ;
 
+internal enum TaskbookDeliveryMode
+{
+    OfflinePackage,
+    OfflineExecutable,
+    Online,
+}
+
 internal static class BuilderSettingsDialogs
 {
-    public static bool TryPickDeliveryMode(IWin32Window owner, out bool online, out StoragePlan plan)
+    public static bool TryPickDeliveryMode(IWin32Window owner, out TaskbookDeliveryMode mode)
     {
         using var dlg = new Form
         {
@@ -15,7 +24,7 @@ internal static class BuilderSettingsDialogs
             MinimizeBox = false,
             MaximizeBox = false,
             ShowInTaskbar = false,
-            ClientSize = new Size(470, 388),
+            ClientSize = new Size(470, 280),
         };
         PvzFormIcon.TryApply(dlg);
         PvzTheme.ApplyWindow(dlg);
@@ -31,83 +40,70 @@ internal static class BuilderSettingsDialogs
         };
         var offline = new RadioButton
         {
-            Text = "Оффлайн — передать файл .pvz ученику",
+            Text = "Оффлайн: передать ученику файл .pvz",
             AutoSize = true,
             Checked = true,
             ForeColor = PvzTheme.Ink,
-            Location = new Point(22, 56),
+            Location = new Point(22, 54),
+        };
+        var executable = new RadioButton
+        {
+            Text = "Оффлайн одним файлом: собрать .exe с задачником внутри",
+            AutoSize = true,
+            ForeColor = PvzTheme.Ink,
+            Location = new Point(22, 84),
         };
         var onlineChoice = new RadioButton
         {
-            Text = "Онлайн — загрузить в облако и получить токен",
+            Text = "Онлайн: загрузить в облако и получить токен",
             AutoSize = true,
             ForeColor = PvzTheme.Ink,
-            Location = new Point(22, 86),
+            Location = new Point(22, 114),
         };
-
-        var planCard = PvzTheme.Card();
-        planCard.SetBounds(22, 122, 426, 148);
-        var planTitle = new Label
-        {
-            Text = "Срок хранения в облаке",
-            AutoSize = true,
-            Font = PvzTheme.BodyBold,
-            ForeColor = PvzTheme.Ink,
-            Location = new Point(14, 8),
-        };
-        var freePlan = new RadioButton
-        {
-            Text = "Бесплатный — 2 недели",
-            AutoSize = true,
-            Checked = true,
-            ForeColor = PvzTheme.Ink,
-            Location = new Point(14, 34),
-        };
-        var paidPlan = new RadioButton
-        {
-            Text = "Продлённый — 1 месяц",
-            AutoSize = true,
-            ForeColor = PvzTheme.Muted,
-            Location = new Point(14, 62),
-        };
-        var planNote = new Label
-        {
-            Text = "«Продлённый» хранит задачник 30 дней. Подписки и ключи активации —\nв личном кабинете учителя на сайте сервера.",
-            AutoSize = false,
-            ForeColor = PvzTheme.Subtle,
-            Font = PvzTheme.Caption,
-            Bounds = new Rectangle(14, 88, 396, 44),
-        };
-        planCard.Controls.AddRange([planTitle, freePlan, paidPlan, planNote]);
 
         var serverLabel = TaskbookOnlineClient.ResolveServerUrl().TrimEnd('/');
         var note = new Label
         {
-            Text = $"Задачник загрузится на сервер PVZS ({serverLabel}): ученики\nподключатся по 6-символьному токену, а вы увидите таблицу результатов.",
             AutoSize = false,
-            Location = new Point(22, 280),
-            Size = new Size(426, 46),
+            Location = new Point(22, 150),
+            Size = new Size(426, 62),
             ForeColor = PvzTheme.Subtle,
             Font = PvzTheme.Caption,
         };
+        var notes = new Dictionary<RadioButton, string>
+        {
+            [offline] = "Ученик открывает .pvz в установленном PVZP: файл сжат и снабжён контрольной суммой,\nно не зашифрован. Пароль преподавателя ученику не нужен.",
+            [executable] = "Редактор скопирует шаблон PVZP.exe и допишет задачник внутрь одного файла.\n" +
+                "Ученику хватит запуска этого .exe, только Python и PascalABC.NET должны быть на его компьютере.",
+            [onlineChoice] = $"Задачник загрузится на сервер PVZS ({serverLabel}): ученики\nподключатся по 6-символьному токену, а вы увидите таблицу результатов\nи сможете выгрузить её в CSV.",
+        };
+        void UpdateNote()
+        {
+            note.Text = notes.FirstOrDefault(pair => pair.Key.Checked).Value ?? "";
+        }
+        foreach (var choice in new[] { offline, executable, onlineChoice })
+            choice.CheckedChanged += (_, _) => UpdateNote();
+        UpdateNote();
 
         var ok = PvzTheme.PrimaryButton("Продолжить");
         ok.DialogResult = DialogResult.OK;
-        ok.SetBounds(268, 338, 110, 38);
+        ok.SetBounds(268, 224, 110, 38);
         var cancel = PvzTheme.GhostButton("Отмена");
         cancel.DialogResult = DialogResult.Cancel;
-        cancel.SetBounds(384, 338, 66, 38);
-        dlg.Controls.AddRange([title, offline, onlineChoice, planCard, note, ok, cancel]);
+        cancel.SetBounds(384, 224, 66, 38);
+        dlg.Controls.AddRange([title, offline, executable, onlineChoice, note, ok, cancel]);
         dlg.AcceptButton = ok;
         dlg.CancelButton = cancel;
 
-        online = false;
-        plan = StoragePlan.FreeTwoWeeks;
+        mode = TaskbookDeliveryMode.OfflinePackage;
         if (dlg.ShowDialog(owner) != DialogResult.OK)
             return false;
 
-        online = onlineChoice.Checked;
-        plan = paidPlan.Checked ? StoragePlan.PaidOneMonth : StoragePlan.FreeTwoWeeks;
+        mode = onlineChoice.Checked
+            ? TaskbookDeliveryMode.Online
+            : executable.Checked
+                ? TaskbookDeliveryMode.OfflineExecutable
+                : TaskbookDeliveryMode.OfflinePackage;
         return true;
     }
 

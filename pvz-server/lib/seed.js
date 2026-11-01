@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 import { normalizeSubject, isValidClass, catalogIndexKey } from "./limits.js";
 import { MAX_PACKAGE_BYTES } from "./config.js";
 import { blob } from "./storage.js";

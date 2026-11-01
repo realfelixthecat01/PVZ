@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using System.Diagnostics;
 using PVZ.Core;
 using PVZ.Player;
@@ -8,12 +10,13 @@ internal sealed class TeacherMenuForm : Form
 {
     private readonly Label _accountLabel;
     private readonly Button _accountButton;
+    private readonly Button _downloadButton;
     private bool _accountBusy;
 
     public TeacherMenuForm()
     {
         PvzFormIcon.TryApply(this);
-        Text = "Пункт Выдачи Задачек — учитель";
+        Text = "Пункт Выдачи Задачек: учитель";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(600, 520);
         ClientSize = new Size(660, 600);
@@ -50,6 +53,7 @@ internal sealed class TeacherMenuForm : Form
 
         var download = CreateMenuButton("2. Скачать готовый задачник", primary: false, PvzFormButtonIcons.Glyphs.Download);
         download.SetBounds(90, 240, 480, 58);
+        _downloadButton = download;
         download.Click += (_, _) =>
         {
             using var catalog = new TeacherCatalogForm();
@@ -83,7 +87,7 @@ internal sealed class TeacherMenuForm : Form
 
         var footer = new Label
         {
-            Text = "Онлайн-режим использует PVZ Cloud: токен для учеников, хранение по тарифу, автоудаление.",
+            Text = "Онлайн-режим использует PVZ Cloud: токен для учеников, разные сроки хранения с автоудалением.",
             AutoSize = false,
             TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = PvzTheme.Subtle,
@@ -111,7 +115,9 @@ internal sealed class TeacherMenuForm : Form
 
             var serverUrl = await TaskbookOnlineClient.ResolveServerUrlAsync();
             var token = await TeacherServerAuth.EnsureAccessTokenAsync(this, serverUrl);
-            _accountLabel.Text = $"Учётная запись: {DescribeProfile(token is null ? null : TeacherServerAuth.Profile)}";
+            var profile = token is null ? null : TeacherServerAuth.Profile;
+            _accountLabel.Text = $"Учётная запись: {DescribeProfile(profile)}";
+            _downloadButton.Enabled = profile is not { IsGuest: true };
         }
         catch (Exception exception) when (exception is InvalidOperationException or HttpRequestException or TaskCanceledException or IOException)
         {
@@ -134,6 +140,8 @@ internal sealed class TeacherMenuForm : Form
     {
         if (profile is null)
             return "вход не выполнен";
+        if (profile.IsGuest)
+            return "гость · один задачник на 48 часов";
         var name = string.IsNullOrWhiteSpace(profile.FullName) ? profile.Username : profile.FullName;
         return string.IsNullOrWhiteSpace(name) || name == profile.Username
             ? profile.Username
@@ -146,7 +154,7 @@ internal sealed class TeacherMenuForm : Form
         try
         {
             var serverUrl = await TaskbookOnlineClient.ResolveServerUrlAsync();
-            Process.Start(new ProcessStartInfo(new Uri(new Uri(serverUrl), "admin").ToString())
+            using var browser = Process.Start(new ProcessStartInfo(new Uri(new Uri(serverUrl), "admin").ToString())
             {
                 UseShellExecute = true,
             });

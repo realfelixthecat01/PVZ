@@ -1,8 +1,10 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 namespace PVZ.Player;
 
 /// <summary>
 /// Единая визуальная тема для WinForms-окон PVZ.
-/// Копия файла лежит в PVZT (namespace PVZ) — обновлять оба.
+/// Копия файла лежит в PVZT (namespace PVZ), обновлять оба.
 /// </summary>
 public static class PvzTheme
 {

@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using System.Diagnostics;
 using System.Drawing.Imaging;
 using PVZ.Core;
@@ -50,7 +52,7 @@ internal sealed class MainForm : Form
     {
         PvzTheme.EnableAutoScale(this);
         PvzTheme.FitToScreen(this);
-        Text = "Пункт Выдачи Задач — тест";
+        Text = "Пункт Выдачи Задач: тест";
         Width = 1000;
         Height = 700;
         StartPosition = FormStartPosition.CenterScreen;
@@ -876,8 +878,6 @@ internal sealed class MainForm : Form
             Interlocked.Exchange(ref _reportPending, 0);
         }
     }
-
-    // ---- Просмотр экрана учителем: по кнопке, с видимой плашкой и кнопкой «Стоп» ----
 
     private void BuildScreenShareBanner()
     {

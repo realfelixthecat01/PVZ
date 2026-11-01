@@ -1,9 +1,11 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using PVZ.Core;
 
 namespace PVZ.Catalog;
 
 /// <summary>
-/// Готовые сборники заданий по английскому языку. Каждый «_» в тексте — один пропуск;
+/// Готовые сборники заданий по английскому языку. Каждый «_» в тексте задает один пропуск,
 /// количество ответов обязано совпадать с количеством пропусков (проверяется при сборке).
 /// Варианты ответа разделяются «|», например «does not|doesn't».
 /// </summary>
@@ -11,6 +13,24 @@ public static class EnglishCollections
 {
     public static IReadOnlyList<FillBlankCollectionSeed> Build() => new List<FillBlankCollectionSeed>
     {
+        new(2, "english-02-alphabet.pvz", "Английский алфавит", new[]
+        {
+            new FillBlankTaskSeed(
+                "The first letter of the alphabet is _. The last letter is _. There are _ letters in the alphabet. There are _ vowels: a, e, i, o, u. The letter between B and D is _. What comes next: A, B, _.",
+                new[] { "A|a", "Z|z", "26", "5", "C|c", "C|c" }),
+            new FillBlankTaskSeed(
+                "C-A-T is _. B-O-O-K is _. P-E-N is _. D-O-G is _. R-E-D is _. O-N-E is _.",
+                new[] { "cat", "book", "pen", "dog", "red", "one" }),
+        }),
+        new(2, "english-02-numbers-colours.pvz", "Числа и цвета", new[]
+        {
+            new FillBlankTaskSeed(
+                "two and three = _. five minus one = _. ten divided by two = _. four times two = _. The number after nine is _. The number before ten is _.",
+                new[] { "five|5", "four|4", "five|5", "eight|8", "ten|10", "nine|9" }),
+            new FillBlankTaskSeed(
+                "The colour of grass is _. The summer sky is _. Snow is _. A ripe apple is _. A banana is _. Night is _.",
+                new[] { "green", "blue", "white", "red", "yellow", "black" }),
+        }),
         new(3, "english-03-to-be.pvz", "To be: am / is / are", new[]
         {
             new FillBlankTaskSeed(

@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using System.Diagnostics;
 
 namespace PVZ.Player;
@@ -11,7 +13,8 @@ internal static class ExplorerHost
 
         try
         {
-            // Do not use /T — it kills child processes (e.g. this app if started from Explorer).
+            // Без /T: с ним taskkill убьёт и дочерние процессы, включая это приложение,
+            // если его запустили из проводника.
             using var taskKill = Process.Start(new ProcessStartInfo
             {
                 FileName = "taskkill",

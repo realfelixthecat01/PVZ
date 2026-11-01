@@ -1,5 +1,8 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 import fs from "node:fs";
 import path from "node:path";
+import { normalizeSubject, isValidClass } from "../lib/limits.js";
 
 // Наполняет Blob развёрнутого сервера каталогом и сборками:
 //   node scripts/seed-remote.mjs --server https://pvz-server.vercel.app --password <пароль> \
@@ -35,13 +38,20 @@ function walk(directory) {
 
 function collectCatalog(directory) {
   const files = [];
+  let skipped = 0;
   for (const file of walk(directory)) {
     if (!file.toLowerCase().endsWith(".pvz")) continue;
     const relative = path.relative(directory, file).split(path.sep);
-    if (relative.length !== 3) continue;
-    files.push({ file, pathname: `pvz/catalog/${relative[0]}/${Number(relative[1])}/${relative[2]}` });
+    const subject = relative.length === 3 ? normalizeSubject(relative[0]) : null;
+    const classNumber = Number(relative[1]);
+    if (!subject || !isValidClass(subject, classNumber) || !/^[^\\/\u0000]+\.pvz$/i.test(relative[2])) {
+      console.warn(`Пропущен путь ${file}: ждём предмет/класс/имя.pvz с допустимым классом.`);
+      skipped++;
+      continue;
+    }
+    files.push({ file, pathname: `pvz/catalog/${subject}/${classNumber}/${relative[2]}` });
   }
-  return files;
+  return { files, skipped };
 }
 
 function collectDownloads(directory) {
@@ -77,7 +87,7 @@ async function upload(server, token, { file, pathname }, index, total) {
   const { uploadUrl, headers } = await ticket.json();
   const put = await fetch(new URL(uploadUrl, server), { method: "PUT", headers, body: fs.readFileSync(file) });
   if (!put.ok) throw new Error(`${pathname}: загрузка в Blob не удалась (HTTP ${put.status}).`);
-  console.log(`[${index}/${total}] ${pathname} — ${(size / 1024 / 1024).toFixed(2)} МиБ`);
+  console.log(`[${index}/${total}] ${pathname}, ${(size / 1024 / 1024).toFixed(2)} МиБ`);
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -87,16 +97,15 @@ if (!args.server || !args.password || (!args.catalog && !args.downloads)) {
 }
 
 const server = String(args.server).replace(/\/+$/, "");
-const files = [
-  ...(args.catalog ? collectCatalog(path.resolve(String(args.catalog))) : []),
-  ...(args.downloads ? collectDownloads(path.resolve(String(args.downloads))) : []),
-];
+const catalog = args.catalog ? collectCatalog(path.resolve(String(args.catalog))) : { files: [], skipped: 0 };
+const downloads = args.downloads ? collectDownloads(path.resolve(String(args.downloads))) : [];
+const files = [...catalog.files, ...downloads];
 if (files.length === 0) {
   console.error("Не найдено файлов для загрузки.");
   process.exit(1);
 }
 
-console.log(`Сервер: ${server}, файлов: ${files.length}.`);
+console.log(`Сервер: ${server}, файлов: ${files.length}, пропущено: ${catalog.skipped}.`);
 const token = await login(server, String(args.password));
 
 if (args.reset) {

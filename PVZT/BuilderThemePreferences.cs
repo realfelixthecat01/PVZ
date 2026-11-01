@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using System.Text.Json;
 
 namespace PVZ;

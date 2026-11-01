@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using PVZ.Core;
 
 namespace PVZ.Player;
@@ -20,6 +22,9 @@ internal sealed class TaskWorkspaceControl : UserControl
     private readonly Action? _onProgressChanged;
     private readonly TaskbookCompilerFlags _allowedCompilers;
     private readonly bool _isFillTask;
+    private readonly bool _isChoiceTask;
+    private readonly bool _isMatchingTask;
+    private readonly bool _isShortAnswerTask;
 
     private readonly TextBox? _codeEditor;
     private readonly TextBox _outputBox;
@@ -28,6 +33,10 @@ internal sealed class TaskWorkspaceControl : UserControl
     private readonly TabControl _innerTabs;
     private readonly List<TextBox> _blankInputs = new();
     private readonly List<FlowLayoutPanel> _worksheetRows = new();
+    private readonly List<CheckBox> _optionChecks = new();
+    private readonly List<ComboBox> _pairCombos = new();
+    private readonly List<Label> _pairRows = new();
+    private TextBox? _shortAnswerBox;
 
     public TaskProgress Progress { get; } = new();
 
@@ -44,6 +53,9 @@ internal sealed class TaskWorkspaceControl : UserControl
         _onProgressChanged = onProgressChanged;
         _allowedCompilers = allowedCompilers;
         _isFillTask = task.Kind == TaskbookTaskKind.FillInBlanks;
+        _isChoiceTask = task.Kind == TaskbookTaskKind.Choice;
+        _isMatchingTask = task.Kind == TaskbookTaskKind.Matching;
+        _isShortAnswerTask = task.Kind == TaskbookTaskKind.ShortAnswer;
         Dock = DockStyle.Fill;
         BackColor = CanvasColor;
         Padding = new Padding(12);
@@ -89,6 +101,33 @@ internal sealed class TaskWorkspaceControl : UserControl
 
             _innerTabs.TabPages.Add(worksheetTab);
             _innerTabs.TabPages.Add(conditionTab);
+        }
+        else if (_isChoiceTask)
+        {
+            _btnTest = CreateButton("Проверить ответ", primary: true);
+            _btnTest.Click += (_, _) => CheckChoice();
+
+            var questionTab = new TabPage("Вопрос");
+            questionTab.Controls.Add(BuildChoicePanel());
+            _innerTabs.TabPages.Add(questionTab);
+        }
+        else if (_isMatchingTask)
+        {
+            _btnTest = CreateButton("Проверить соответствие", primary: true);
+            _btnTest.Click += (_, _) => CheckMatching();
+
+            var matchingTab = new TabPage("Соотнесите");
+            matchingTab.Controls.Add(BuildMatchingPanel());
+            _innerTabs.TabPages.Add(matchingTab);
+        }
+        else if (_isShortAnswerTask)
+        {
+            _btnTest = CreateButton("Проверить ответ", primary: true);
+            _btnTest.Click += (_, _) => CheckShortAnswer();
+
+            var answerTab = new TabPage("Ответ");
+            answerTab.Controls.Add(BuildShortAnswerPanel());
+            _innerTabs.TabPages.Add(answerTab);
         }
         else
         {
@@ -384,6 +423,199 @@ internal sealed class TaskWorkspaceControl : UserControl
         return layout;
     }
 
+    private TextBox CreateDescriptionBox(float fontSize) => new()
+    {
+        Dock = DockStyle.Fill,
+        ReadOnly = true,
+        Multiline = true,
+        ScrollBars = ScrollBars.Vertical,
+        Text = _task.Description,
+        Font = new Font("Segoe UI", fontSize),
+        BackColor = SurfaceColor,
+        BorderStyle = BorderStyle.FixedSingle,
+    };
+
+    private Control BuildChoicePanel()
+    {
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Padding = new Padding(8),
+            BackColor = CanvasColor,
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 38));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 62));
+
+        var descriptionBox = CreateDescriptionBox(11F);
+        descriptionBox.Margin = new Padding(0, 0, 0, 10);
+
+        var group = new GroupBox
+        {
+            Text = "Отметьте верные варианты",
+            Dock = DockStyle.Fill,
+            Padding = new Padding(12),
+            BackColor = SurfaceColor,
+            ForeColor = InkColor,
+            Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
+        };
+
+        var flow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(4),
+            BackColor = SurfaceColor,
+        };
+
+        foreach (var option in _task.Options)
+        {
+            var check = new CheckBox
+            {
+                Text = option.Text,
+                AutoSize = true,
+                MaximumSize = new Size(660, 0),
+                Font = new Font("Segoe UI", 11F),
+                ForeColor = InkColor,
+                Margin = new Padding(0, 4, 0, 4),
+                Cursor = Cursors.Hand,
+            };
+            _optionChecks.Add(check);
+            flow.Controls.Add(check);
+        }
+
+        group.Controls.Add(flow);
+        layout.Controls.Add(descriptionBox, 0, 0);
+        layout.Controls.Add(group, 0, 1);
+        return layout;
+    }
+
+    private Control BuildMatchingPanel()
+    {
+        var group = new GroupBox
+        {
+            Text = "Подберите правую часть к каждой левой",
+            Dock = DockStyle.Fill,
+            Padding = new Padding(12),
+            BackColor = SurfaceColor,
+            ForeColor = InkColor,
+            Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
+        };
+
+        var flow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(4),
+            BackColor = SurfaceColor,
+        };
+
+        var rightOrder = Enumerable.Range(0, _task.Pairs.Count).ToList();
+        Shuffle(rightOrder);
+
+        for (var index = 0; index < _task.Pairs.Count; index++)
+        {
+            var row = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Margin = new Padding(0, 3, 0, 3),
+                BackColor = SurfaceColor,
+            };
+
+            var leftLabel = new Label
+            {
+                Text = $"{index + 1}. {_task.Pairs[index].Left}",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 11F),
+                ForeColor = InkColor,
+                Margin = new Padding(0, 7, 10, 0),
+            };
+
+            var combo = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = 330,
+                Font = new Font("Segoe UI", 10.5F),
+                BackColor = RaisedSurfaceColor,
+                ForeColor = InkColor,
+                FlatStyle = FlatStyle.Flat,
+                Margin = new Padding(0, 4, 0, 0),
+            };
+            foreach (var pairIndex in rightOrder)
+                combo.Items.Add(new MatchItem(pairIndex, $"{pairIndex + 1}. {_task.Pairs[pairIndex].Right}"));
+
+            row.Controls.Add(leftLabel);
+            row.Controls.Add(combo);
+            _pairCombos.Add(combo);
+            _pairRows.Add(leftLabel);
+            flow.Controls.Add(row);
+        }
+
+        group.Controls.Add(flow);
+        return group;
+    }
+
+    private static void Shuffle(List<int> list)
+    {
+        for (var index = list.Count - 1; index > 0; index--)
+        {
+            var swapIndex = Random.Shared.Next(index + 1);
+            (list[index], list[swapIndex]) = (list[swapIndex], list[index]);
+        }
+    }
+
+    private Control BuildShortAnswerPanel()
+    {
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
+            Padding = new Padding(8),
+            BackColor = CanvasColor,
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+
+        var descriptionBox = CreateDescriptionBox(11F);
+        descriptionBox.Margin = new Padding(0, 0, 0, 10);
+
+        var answerBox = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 13F, FontStyle.Bold),
+            BackColor = RaisedSurfaceColor,
+            ForeColor = InkColor,
+            BorderStyle = BorderStyle.FixedSingle,
+            TextAlign = HorizontalAlignment.Center,
+            PlaceholderText = "Ваш ответ",
+            Margin = new Padding(0, 0, 0, 8),
+        };
+        _shortAnswerBox = answerBox;
+
+        var hint = new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = "Впишите ответ одним словом или числом и нажмите «Проверить ответ».",
+            Font = new Font("Segoe UI", 10F),
+            ForeColor = MutedColor,
+        };
+
+        layout.Controls.Add(descriptionBox, 0, 0);
+        layout.Controls.Add(answerBox, 0, 1);
+        layout.Controls.Add(hint, 0, 2);
+        return layout;
+    }
+
     private Control BuildWorksheetPanel()
     {
         var group = new GroupBox
@@ -528,11 +760,7 @@ internal sealed class TaskWorkspaceControl : UserControl
 
     private void CheckFillBlanks()
     {
-        if (!_canRunTests())
-        {
-            MessageBox.Show("Сначала нажмите «Начать тест» на первой вкладке.", "PVZ", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
+        if (!RequireTestStarted()) return;
 
         _btnTest.Enabled = false;
         try
@@ -550,9 +778,9 @@ internal sealed class TaskWorkspaceControl : UserControl
             var emptyCount = _blankInputs.Count(box => string.IsNullOrWhiteSpace(box.Text));
             if (emptyCount > 0)
             {
-                ShowOutputTab($"Заполните все пропуски: пустых полей — {emptyCount}.");
+                ShowOutputTab($"Заполните все пропуски, пустых полей: {emptyCount}.");
                 MessageBox.Show(
-                    $"Заполните все пропуски: осталось пустых полей — {emptyCount}.",
+                    $"Заполните все пропуски, осталось пустых полей: {emptyCount}.",
                     "PVZ",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -616,13 +844,240 @@ internal sealed class TaskWorkspaceControl : UserControl
         }
     }
 
+    private void CheckChoice()
+    {
+        if (!RequireTestStarted()) return;
+
+        _btnTest.Enabled = false;
+        try
+        {
+            ShowOutputTab("Проверка…");
+            Progress.Reset();
+            Progress.EarnedPoints = 0;
+
+            var options = _task.Options;
+            if (options.Count == 0 || _optionChecks.Count != options.Count)
+            {
+                ShowOutputTab("В задании нет вариантов для проверки.");
+                return;
+            }
+
+            var lines = new List<string>();
+            var allRight = true;
+            for (var index = 0; index < options.Count; index++)
+            {
+                var option = options[index];
+                var check = _optionChecks[index];
+                if (check.Checked && option.Correct)
+                {
+                    Progress.EarnedPoints += option.Points;
+                    check.ForeColor = CorrectColor;
+                    lines.Add($"Вариант {index + 1}: верно (+{option.Points} баллов)");
+                }
+                else if (check.Checked)
+                {
+                    Progress.EarnedPoints -= option.Points;
+                    allRight = false;
+                    check.ForeColor = WrongColor;
+                    lines.Add($"Вариант {index + 1}: отмечен зря (-{option.Points} баллов)");
+                }
+                else if (option.Correct)
+                {
+                    allRight = false;
+                    check.ForeColor = WrongColor;
+                    lines.Add($"Вариант {index + 1}: пропущен верный вариант");
+                }
+                else
+                {
+                    check.ForeColor = InkColor;
+                }
+            }
+
+            Progress.EarnedPoints = Math.Max(0, Progress.EarnedPoints);
+            Progress.Completed = allRight;
+            if (Progress.Completed)
+            {
+                lines.Add("");
+                lines.Add($"Верные варианты отмечены точно! Бонус: +{_task.BonusPointsForAllTests} баллов");
+                Progress.EarnedPoints += _task.BonusPointsForAllTests;
+            }
+
+            Progress.EarnedPoints = Math.Min(Progress.EarnedPoints, TaskbookScoring.GetTaskMaxScore(_task));
+
+            lines.Add("");
+            lines.Add($"Итог: {Progress.EarnedPoints} из {TaskbookScoring.GetTaskMaxScore(_task)} баллов.");
+            ShowOutputTab(string.Join(Environment.NewLine, lines));
+            _onProgressChanged?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            ShowOutputTab($"Ошибка проверки:\n{ex.Message}");
+        }
+        finally
+        {
+            _btnTest.Enabled = true;
+        }
+    }
+
+    private void CheckMatching()
+    {
+        if (!RequireTestStarted()) return;
+
+        _btnTest.Enabled = false;
+        try
+        {
+            ShowOutputTab("Проверка…");
+            Progress.Reset();
+            Progress.EarnedPoints = 0;
+
+            var pairs = _task.Pairs;
+            if (pairs.Count == 0 || _pairCombos.Count != pairs.Count)
+            {
+                ShowOutputTab("В задании нет пар для проверки.");
+                return;
+            }
+
+            var unanswered = _pairCombos.Count(combo => combo.SelectedIndex < 0);
+            if (unanswered > 0)
+            {
+                ShowOutputTab($"Соотнесите все пары, невыбранных: {unanswered}.");
+                MessageBox.Show(
+                    $"Соотнесите все пары, осталось невыбранных: {unanswered}.",
+                    "PVZ",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            var lines = new List<string>();
+            var correct = 0;
+            for (var index = 0; index < pairs.Count; index++)
+            {
+                var combo = _pairCombos[index];
+                var chosen = (MatchItem)combo.SelectedItem!;
+                var passed = chosen.PairIndex == index;
+                combo.ForeColor = passed ? CorrectColor : WrongColor;
+                _pairRows[index].ForeColor = passed ? CorrectColor : WrongColor;
+
+                if (passed)
+                {
+                    correct++;
+                    Progress.EarnedPoints += pairs[index].Points;
+                    lines.Add($"Пара {index + 1}: верно (+{pairs[index].Points} баллов)");
+                }
+                else
+                {
+                    lines.Add($"Пара {index + 1}: неверно. «{pairs[index].Left}» соответствует «{pairs[index].Right}»");
+                }
+            }
+
+            Progress.Completed = correct == pairs.Count;
+            if (Progress.Completed)
+            {
+                lines.Add("");
+                lines.Add($"Все пары собраны верно! Бонус: +{_task.BonusPointsForAllTests} баллов");
+                Progress.EarnedPoints += _task.BonusPointsForAllTests;
+            }
+
+            Progress.EarnedPoints = Math.Min(Progress.EarnedPoints, TaskbookScoring.GetTaskMaxScore(_task));
+
+            lines.Add("");
+            lines.Add($"Итог: {correct} из {pairs.Count} пар, {Progress.EarnedPoints} баллов.");
+            ShowOutputTab(string.Join(Environment.NewLine, lines));
+            _onProgressChanged?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            ShowOutputTab($"Ошибка проверки:\n{ex.Message}");
+        }
+        finally
+        {
+            _btnTest.Enabled = true;
+        }
+    }
+
+    private void CheckShortAnswer()
+    {
+        if (!RequireTestStarted()) return;
+
+        _btnTest.Enabled = false;
+        try
+        {
+            ShowOutputTab("Проверка…");
+            Progress.Reset();
+            Progress.EarnedPoints = 0;
+
+            var blank = _task.Blanks.FirstOrDefault();
+            if (blank is null || _shortAnswerBox is null)
+            {
+                ShowOutputTab("В задании нет ответа для проверки.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_shortAnswerBox.Text))
+            {
+                ShowOutputTab("Впишите ответ, затем нажмите «Проверить ответ».");
+                MessageBox.Show("Сначала впишите ответ.", "PVZ", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var lines = new List<string>();
+            var maximum = TaskbookScoring.GetTaskMaxScore(_task);
+            var passed = FillBlankRules.Matches(blank, _shortAnswerBox.Text);
+            _shortAnswerBox.BackColor = passed ? CorrectColor : WrongColor;
+
+            if (passed)
+            {
+                Progress.EarnedPoints += blank.Points;
+                Progress.Completed = true;
+                lines.Add($"Верно! (+{blank.Points} баллов)");
+                lines.Add("");
+                lines.Add($"Бонус: +{_task.BonusPointsForAllTests} баллов");
+                Progress.EarnedPoints += _task.BonusPointsForAllTests;
+            }
+            else if (blank.ShowToStudent && !string.IsNullOrWhiteSpace(blank.Answer))
+            {
+                lines.Add($"Неверно. Ваш ответ: «{_shortAnswerBox.Text.Trim()}». Правильный ответ: «{blank.Answer}»");
+            }
+            else
+            {
+                lines.Add("Неверно. Правильный ответ скрыт.");
+            }
+
+            Progress.EarnedPoints = Math.Min(Progress.EarnedPoints, maximum);
+
+            lines.Add("");
+            lines.Add($"Итог: {Progress.EarnedPoints} из {maximum} баллов.");
+            ShowOutputTab(string.Join(Environment.NewLine, lines));
+            _onProgressChanged?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            ShowOutputTab($"Ошибка проверки:\n{ex.Message}");
+        }
+        finally
+        {
+            _btnTest.Enabled = true;
+        }
+    }
+
+    private bool RequireTestStarted()
+    {
+        if (_canRunTests())
+            return true;
+
+        MessageBox.Show("Сначала нажмите «Начать тест» на первой вкладке.", "PVZ", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return false;
+    }
+
+    private sealed record MatchItem(int PairIndex, string Text)
+    {
+        public override string ToString() => Text;
+    }
+
     public async Task RunTestsAsync()
     {
-        if (!_canRunTests())
-        {
-            MessageBox.Show("Сначала нажмите «Начать тест» на первой вкладке.", "PVZ", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
+        if (!RequireTestStarted()) return;
 
         _btnTest.Enabled = false;
         try

@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using PVZ.Core;
 using PVZ.Player;
 
@@ -31,22 +33,18 @@ internal static class TeacherServerAuth
         return _accessToken;
     }
 
+    /// <summary>Окно входа: два поля и три кнопки. Имя аккаунта помнить не нужно, вход и регистрация
+    /// идут по одним и тем же полям: фамилия с именем и пароль.</summary>
     private sealed class TeacherAccountDialog : Form
     {
         private readonly string _serverUrl;
         private readonly RadioButton _loginMode;
         private readonly RadioButton _registerMode;
-        private readonly Panel _loginPanel;
-        private readonly Panel _registerPanel;
-        private readonly TextBox _identifier;
-        private readonly TextBox _loginPassword;
-        private readonly TextBox _username;
         private readonly TextBox _fullName;
-        private readonly TextBox _school;
-        private readonly TextBox _email;
-        private readonly TextBox _registerPassword;
+        private readonly TextBox _password;
         private readonly Label _hint;
         private readonly Button _ok;
+        private readonly Button _guest;
         private readonly Button _cancel;
         private bool _busy;
 
@@ -56,7 +54,7 @@ internal static class TeacherServerAuth
         {
             _serverUrl = serverUrl;
             PvzFormIcon.TryApply(this);
-            Text = "Учётная запись учителя";
+            Text = "Вход для учителя";
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterParent;
             MinimizeBox = false;
@@ -67,7 +65,7 @@ internal static class TeacherServerAuth
 
             _loginMode = new RadioButton
             {
-                Text = "Вход",
+                Text = "У меня уже есть аккаунт",
                 Checked = true,
                 AutoSize = true,
                 ForeColor = PvzTheme.Ink,
@@ -75,24 +73,15 @@ internal static class TeacherServerAuth
             };
             _registerMode = new RadioButton
             {
-                Text = "Создать аккаунт учителя",
+                Text = "Я здесь впервые",
                 AutoSize = true,
                 ForeColor = PvzTheme.Ink,
-                Location = new Point(90, 16),
+                Location = new Point(200, 16),
             };
 
-            _loginPanel = new Panel { Location = new Point(18, 46), Size = new Size(364, 116) };
-            _identifier = AddField(_loginPanel, 0, "Имя аккаунта или email", "masha.ivanova или teacher@school.by");
-            _loginPassword = AddField(_loginPanel, 58, "Пароль", "Пароль");
-            _loginPassword.UseSystemPasswordChar = true;
-
-            _registerPanel = new Panel { Location = new Point(18, 46), Size = new Size(364, 290), Visible = false };
-            _username = AddField(_registerPanel, 0, "Имя аккаунта", "masha.ivanova");
-            _fullName = AddField(_registerPanel, 58, "ФИО", "Мария Петрова");
-            _school = AddField(_registerPanel, 116, "Школа или гимназия", "Гимназия №1, Минск");
-            _email = AddField(_registerPanel, 174, "Email", "teacher@school.by");
-            _registerPassword = AddField(_registerPanel, 232, "Пароль", "От 6 символов");
-            _registerPassword.UseSystemPasswordChar = true;
+            _fullName = AddField(46, "Как вас зовут? Имя и фамилия", "Мария Иванова");
+            _password = AddField(104, "Придумайте пароль (от 6 символов)", "Пароль");
+            _password.UseSystemPasswordChar = true;
 
             _hint = new Label
             {
@@ -102,23 +91,23 @@ internal static class TeacherServerAuth
             };
             _ok = PvzTheme.PrimaryButton("Войти");
             _ok.Click += OnAccept;
+            _guest = PvzTheme.SecondaryButton("Работать как гость");
+            _guest.Click += OnGuest;
             _cancel = PvzTheme.GhostButton("Отмена");
             _cancel.DialogResult = DialogResult.Cancel;
 
-            Controls.AddRange([_loginMode, _registerMode, _loginPanel, _registerPanel, _hint, _ok, _cancel]);
+            Controls.AddRange([_loginMode, _registerMode, _fullName, _password, _hint, _ok, _guest, _cancel]);
             AcceptButton = _ok;
             CancelButton = _cancel;
 
             _loginMode.CheckedChanged += (_, _) => ApplyMode();
             ApplyMode();
-            Shown += (_, _) => FirstField.Focus();
+            Shown += (_, _) => _fullName.Focus();
         }
 
         private bool Registering => _registerMode.Checked;
 
-        private Control FirstField => Registering ? _username : _identifier;
-
-        private static TextBox AddField(Panel panel, int top, string labelText, string placeholder)
+        private TextBox AddField(int top, string labelText, string placeholder)
         {
             var label = new Label
             {
@@ -126,32 +115,27 @@ internal static class TeacherServerAuth
                 AutoSize = true,
                 ForeColor = PvzTheme.Muted,
                 Font = PvzTheme.Caption,
-                Location = new Point(0, top),
+                Bounds = new Rectangle(18, top, 364, 18),
             };
             var input = PvzTheme.InputBox(placeholder);
-            input.SetBounds(0, top + 20, 364, 32);
-            panel.Controls.AddRange([label, input]);
+            input.SetBounds(18, top + 20, 364, 32);
+            Controls.Add(label);
+            Controls.Add(input);
             return input;
         }
 
         private void ApplyMode()
         {
-            var registering = Registering;
-            _loginPanel.Visible = !registering;
-            _registerPanel.Visible = registering;
-
-            var fieldBottom = 46 + (registering ? _registerPanel.Height : _loginPanel.Height);
-            _hint.Text = registering
-                ? "Регистрация бесплатна. Имя аккаунта — латинские буквы, цифры, точка, дефис; пароль от 6 символов."
-                : "Пароль проверяет сервер — на этом компьютере он не сохраняется.";
-            _hint.SetBounds(18, fieldBottom + 8, 364, 30);
-
-            _ok.Text = registering ? "Создать аккаунт" : "Войти";
-            var buttonsTop = fieldBottom + 8 + 30 + 12;
-            _ok.SetBounds(148, buttonsTop, 130, 38);
-            _cancel.SetBounds(288, buttonsTop, 94, 38);
-            ClientSize = new Size(400, buttonsTop + 38 + 18);
-            FirstField.Focus();
+            _hint.Text = Registering
+                ? "Регистрация бесплатна и состоит из этих двух полей. Почта не нужна."
+                : "Можно войти по имени с фамилией или по почте, если вы её указывали.";
+            _hint.SetBounds(18, 158, 364, 30);
+            _ok.Text = Registering ? "Создать аккаунт" : "Войти";
+            _ok.SetBounds(148, 196, 130, 38);
+            _guest.SetBounds(18, 248, 260, 34);
+            _cancel.SetBounds(288, 248, 94, 34);
+            ClientSize = new Size(400, 300);
+            _fullName.Focus();
         }
 
         private void SetBusy(bool busy)
@@ -159,9 +143,10 @@ internal static class TeacherServerAuth
             _busy = busy;
             _loginMode.Enabled = !busy;
             _registerMode.Enabled = !busy;
-            _loginPanel.Enabled = !busy;
-            _registerPanel.Enabled = !busy;
+            _fullName.Enabled = !busy;
+            _password.Enabled = !busy;
             _ok.Enabled = !busy;
+            _guest.Enabled = !busy;
             _ok.Text = busy ? "Подключение…" : Registering ? "Создать аккаунт" : "Войти";
         }
 
@@ -169,25 +154,10 @@ internal static class TeacherServerAuth
         {
             if (_busy)
                 return;
-
-            string? missing = null;
-            if (Registering)
+            if (string.IsNullOrWhiteSpace(_fullName.Text) || string.IsNullOrEmpty(_password.Text))
             {
-                if (string.IsNullOrWhiteSpace(_username.Text) ||
-                    string.IsNullOrWhiteSpace(_fullName.Text) ||
-                    string.IsNullOrWhiteSpace(_school.Text) ||
-                    string.IsNullOrWhiteSpace(_email.Text) ||
-                    string.IsNullOrEmpty(_registerPassword.Text))
-                    missing = "Заполните все поля регистрации.";
-            }
-            else if (string.IsNullOrWhiteSpace(_identifier.Text) || string.IsNullOrEmpty(_loginPassword.Text))
-            {
-                missing = "Введите имя аккаунта и пароль.";
-            }
-
-            if (missing is not null)
-            {
-                MessageBox.Show(this, missing, "Вход на сервер", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, "Введите имя с фамилией и пароль.", "Вход на сервер",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -196,21 +166,43 @@ internal static class TeacherServerAuth
             {
                 Receipt = Registering
                     ? await TaskbookOnlineClient.AccountRegisterAsync(
-                        _username.Text.Trim(),
+                        AccountRoles.Teacher,
                         _fullName.Text.Trim(),
-                        _school.Text.Trim(),
-                        _email.Text.Trim(),
-                        _registerPassword.Text,
+                        _password.Text,
+                        className: "",
                         _serverUrl)
                     : await TaskbookOnlineClient.AccountLoginAsync(
-                        _identifier.Text.Trim(),
-                        _loginPassword.Text,
+                        _fullName.Text.Trim(),
+                        _password.Text,
                         _serverUrl);
                 DialogResult = DialogResult.OK;
             }
             catch (Exception exception) when (exception is InvalidOperationException or HttpRequestException or TaskCanceledException or IOException)
             {
                 MessageBox.Show(this, exception.Message, "Вход на сервер", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                if (!IsDisposed)
+                    SetBusy(false);
+            }
+        }
+
+        private async void OnGuest(object? sender, EventArgs e)
+        {
+            if (_busy)
+                return;
+
+            SetBusy(true);
+            try
+            {
+                var secret = LocalIdentityStore.LoadOrCreateGuestSecret();
+                Receipt = await TaskbookOnlineClient.GuestLoginAsync(secret, _serverUrl);
+                DialogResult = DialogResult.OK;
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or HttpRequestException or TaskCanceledException or IOException)
+            {
+                MessageBox.Show(this, exception.Message, "Гостевой режим", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             finally
             {

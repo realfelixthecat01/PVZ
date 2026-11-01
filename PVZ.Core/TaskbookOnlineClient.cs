@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -142,28 +144,30 @@ public static class TaskbookOnlineClient
         });
     }
 
-    /// <summary>Регистрация аккаунта учителя: имя аккаунта, ФИО, школа, email и пароль.</summary>
+    /// <summary>Регистрация учителя или ученика: имя с фамилией и пароль, класс нужен только ученику.</summary>
     public static async Task<AccountAuthReceipt> AccountRegisterAsync(
-        string username,
+        string role,
         string fullName,
-        string school,
-        string email,
         string password,
+        string className,
         string serverUrl,
+        string school = "",
+        string email = "",
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(username);
         ArgumentException.ThrowIfNullOrWhiteSpace(fullName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(school);
-        ArgumentException.ThrowIfNullOrWhiteSpace(email);
         ArgumentException.ThrowIfNullOrWhiteSpace(password);
+        if (role != AccountRoles.Teacher && role != AccountRoles.Student) {
+            throw new ArgumentException("Неизвестная роль аккаунта.", nameof(role));
+        }
+        if (role == AccountRoles.Student) ArgumentException.ThrowIfNullOrWhiteSpace(className);
 
         return await WithTransportErrorsAsync(serverUrl, cancellationToken, async () =>
         {
             using var client = CreateClient(serverUrl);
             using var response = await client.PostAsJsonAsync(
                 "api/account/register",
-                new { username, fullName, school, email, password },
+                new { role, fullName, password, className, school, email },
                 cancellationToken);
             if (!response.IsSuccessStatusCode)
                 throw await CreateServerExceptionAsync(response, cancellationToken);
@@ -173,11 +177,55 @@ public static class TaskbookOnlineClient
         });
     }
 
+    /// <summary>Вход учителя без аккаунта: длинный ключ хранится на компьютере, сервер помнит такого гостя.</summary>
+    public static async Task<AccountAuthReceipt> GuestLoginAsync(
+        string secret,
+        string serverUrl,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(secret);
+
+        return await WithTransportErrorsAsync(serverUrl, cancellationToken, async () =>
+        {
+            using var client = CreateClient(serverUrl);
+            using var response = await client.PostAsJsonAsync(
+                "api/guest/login",
+                new { secret },
+                cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                throw await CreateServerExceptionAsync(response, cancellationToken);
+
+            return await response.Content.ReadFromJsonAsync<AccountAuthReceipt>(JsonOptions, cancellationToken)
+                ?? throw new InvalidDataException("Сервер не выдал токен доступа.");
+        });
+    }
+
+    /// <summary>Результаты ученика по всем задачникам, где он отмечал прогресс под своим аккаунтом.</summary>
+    public static async Task<IReadOnlyList<StudentHistoryItemDto>> StudentHistoryAsync(
+        string accessToken,
+        string serverUrl,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+
+        return await WithTransportErrorsAsync(serverUrl, cancellationToken, async () =>
+        {
+            using var client = CreateClient(serverUrl);
+            using var request = new HttpRequestMessage(HttpMethod.Get, "api/student/history");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using var response = await client.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                throw await CreateServerExceptionAsync(response, cancellationToken);
+
+            return await response.Content.ReadFromJsonAsync<IReadOnlyList<StudentHistoryItemDto>>(JsonOptions, cancellationToken)
+                ?? throw new InvalidDataException("Сервер не вернул историю ученика.");
+        });
+    }
+
     public static async Task<TeacherSessionUploadReceipt> UploadAsync(
         string packagePath,
         string serverUrl,
         string accessToken,
-        StoragePlan plan = StoragePlan.FreeTwoWeeks,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packagePath);
@@ -190,11 +238,10 @@ public static class TaskbookOnlineClient
             if (package.Length <= 0 || package.Length > MaximumPackageBytes)
                 throw new InvalidDataException("Размер .pvz файла недопустим.");
 
-            var planParameter = plan == StoragePlan.PaidOneMonth ? "paid-month" : "free-weeks";
             var begin = await BeginUploadAsync(
                 client,
                 accessToken,
-                new UploadBeginRequest { Target = "teacher-session", Size = package.Length, Plan = planParameter },
+                new UploadBeginRequest { Target = "teacher-session", Size = package.Length },
                 cancellationToken);
             await PutUploadAsync(client, begin, package, cancellationToken);
             var complete = await CompleteUploadAsync<SessionUploadComplete>(
@@ -298,10 +345,66 @@ public static class TaskbookOnlineClient
         });
     }
 
+    /// <summary>Статистика задачника по каждому заданию: сколько учеников решили, средний балл.</summary>
+    public static async Task<SessionStatsDto> GetSessionStatsAsync(
+        string accessToken,
+        string sessionId,
+        string serverUrl,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
+        return await WithTransportErrorsAsync(serverUrl, cancellationToken, async () =>
+        {
+            using var client = CreateClient(serverUrl);
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"api/teacher/sessions/{Uri.EscapeDataString(sessionId)}/stats");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using var response = await client.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                throw await CreateServerExceptionAsync(
+                    response,
+                    cancellationToken,
+                    "Сессия доступа истекла. Войдите снова.");
+            return await response.Content.ReadFromJsonAsync<SessionStatsDto>(JsonOptions, cancellationToken)
+                ?? throw new InvalidDataException("Сервер не вернул статистику задачника.");
+        });
+    }
+
+    /// <summary>Выгрузка результатов всех учеников в CSV: по одной строке на ученика плюс сводка по заданиям.</summary>
+    public static async Task<byte[]> DownloadResultsCsvAsync(
+        string accessToken,
+        string sessionId,
+        string serverUrl,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
+        return await WithTransportErrorsAsync(serverUrl, cancellationToken, async () =>
+        {
+            using var client = CreateClient(serverUrl);
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"api/teacher/sessions/{Uri.EscapeDataString(sessionId)}/export.csv");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                throw await CreateServerExceptionAsync(
+                    response,
+                    cancellationToken,
+                    "Сессия доступа истекла. Войдите снова.");
+            return await ReadBoundedAsync(response, cancellationToken, MaximumExchangeFileBytes);
+        });
+    }
+
     public static async Task<OnlineStudentSession> StartStudentSessionAsync(
         string token,
         OnlineStudentInfo student,
         string serverUrl,
+        string? accountToken = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(token);
@@ -309,6 +412,9 @@ public static class TaskbookOnlineClient
         return await WithTransportErrorsAsync(serverUrl, cancellationToken, async () =>
         {
             using var client = CreateClient(serverUrl);
+            if (!string.IsNullOrWhiteSpace(accountToken)) {
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accountToken);
+            }
             using var response = await client.PostAsJsonAsync(
                 $"api/taskbooks/{Uri.EscapeDataString(token)}/sessions",
                 student,
@@ -389,7 +495,7 @@ public static class TaskbookOnlineClient
         });
     }
 
-    /// <summary>Ученик нажал «Стоп» — сообщаем серверу прекратить просмотр.</summary>
+    /// <summary>Ученик нажал «Стоп», сообщаем серверу прекратить просмотр.</summary>
     public static async Task StopScreenShareAsync(
         string studentSessionId,
         string serverUrl,
@@ -484,7 +590,7 @@ public static class TaskbookOnlineClient
         });
     }
 
-    /// <summary>Отправка своей работы учителю; имя файла — имя выбранного файла на диске.</summary>
+    /// <summary>Отправка своей работы учителю; имя файла берут с диска.</summary>
     public static async Task<ExchangeFileDto> UploadStudentWorkAsync(
         string studentSessionId,
         string filePath,
@@ -604,7 +710,6 @@ public static class TaskbookOnlineClient
     {
         public required string Target { get; init; }
         public long Size { get; init; }
-        public string? Plan { get; init; }
         public string? Name { get; init; }
         public string? SessionId { get; init; }
         public string? StudentSessionId { get; init; }
@@ -659,7 +764,7 @@ public static class TaskbookOnlineClient
         });
     }
 
-    /// <summary>Сервер выдаёт адрес и заголовки для прямой загрузки файла (на Vercel — в Blob).</summary>
+    /// <summary>Сервер выдаёт адрес и заголовки для прямой загрузки файла, на Vercel в Blob.</summary>
     private static async Task<UploadBeginReceipt> BeginUploadAsync(
         HttpClient client,
         string? accessToken,

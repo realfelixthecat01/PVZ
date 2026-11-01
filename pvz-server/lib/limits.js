@@ -1,4 +1,6 @@
-// Порт PVZ.Core.Models: предметы каталога, сроки хранения, тарифы и лимиты.
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
+// Порт PVZ.Core.Models: предметы каталога, сроки хранения и лимиты.
 
 export const SUBJECTS = [
   { id: "informatics", displayName: "Информатика" },
@@ -14,7 +16,7 @@ export function normalizeSubject(subject) {
 export function minimumClassNumber(subject) {
   switch (subject) {
     case "informatics": return 6;
-    case "english": return 3;
+    case "english": return 2;
     case "math": return 1;
     default: throw new Error("Неизвестный предмет.");
   }
@@ -30,7 +32,7 @@ export function displaySubject(subject) {
   return SUBJECTS.find((item) => item.id === subject)?.displayName ?? subject;
 }
 
-// RetentionPeriod — числа, как в C# enum.
+// RetentionPeriod из C#: числа вместо строк, порядок enum совпадает.
 export const RETENTION = {
   HOURS_48: 0,
   WEEK_1: 1,
@@ -64,12 +66,12 @@ export function retentionLifetimeMs(retention) {
 
 export function retentionDisplayName(retention) {
   switch (retention) {
-    case RETENTION.HOURS_48: return "Бесплатный · 48 часов";
+    case RETENTION.HOURS_48: return "Хранение · 48 часов";
     case RETENTION.WEEK_1: return "Хранение · 1 неделя";
     case RETENTION.MONTH_1: return "Хранение · 1 месяц";
     case RETENTION.YEAR_1: return "Хранение · 1 год";
     case RETENTION.FOREVER: return "Постоянное хранение";
-    default: return "Бесплатный · 2 недели";
+    default: return "Хранение · 2 недели";
   }
 }
 
@@ -84,69 +86,10 @@ export function retentionShortLabel(retention) {
   }
 }
 
-// StoragePlan — тариф настольного PVZT.
-export const PLAN = {
-  FREE_TWO_WEEKS: 0,
-  PAID_ONE_MONTH: 1,
-};
-
-export function planToRetention(plan) {
-  return plan === PLAN.PAID_ONE_MONTH ? RETENTION.MONTH_1 : RETENTION.TWO_WEEKS;
-}
-
-// Тарифы облачного кабинета.
-export const STORAGE = {
-  FREE: "free",
-  PRO: "pro",
-  PRO_PLUS: "pro_plus",
-};
-
+// Хранилище не ограничено по количеству задачников, срок выбирает учитель при публикации.
 export const UNLIMITED = -1;
 
-export function limitFor(plan, retention) {
-  const key = `${plan}:${retention}`;
-  switch (key) {
-    case "free:0": return 5;
-    case "pro:0": return 20;
-    case "pro:1": return 15;
-    case "pro:2": return 5;
-    case "pro:3": return 1;
-    case "pro_plus:0": return UNLIMITED;
-    case "pro_plus:1": return UNLIMITED;
-    case "pro_plus:2": return UNLIMITED;
-    case "pro_plus:3": return 100;
-    case "pro_plus:4": return 20;
-    default: return 0;
-  }
-}
-
-export function retentionsFor(plan) {
-  switch (plan) {
-    case STORAGE.PRO: return [RETENTION.HOURS_48, RETENTION.WEEK_1, RETENTION.MONTH_1, RETENTION.YEAR_1];
-    case STORAGE.PRO_PLUS: return [RETENTION.HOURS_48, RETENTION.WEEK_1, RETENTION.MONTH_1, RETENTION.YEAR_1, RETENTION.FOREVER];
-    default: return [RETENTION.HOURS_48];
-  }
-}
-
-export function planDisplayName(plan) {
-  switch (plan) {
-    case STORAGE.PRO: return "Про";
-    case STORAGE.PRO_PLUS: return "Про+";
-    default: return "Бесплатный";
-  }
-}
-
-export function effectivePlan(user, now = new Date()) {
-  if (!user) return STORAGE.FREE;
-  if (user.isAdmin) return STORAGE.PRO_PLUS;
-  const until = user.storageUntil ? new Date(user.storageUntil) : null;
-  if (until && until.getTime() > now.getTime() && (user.storagePlan === STORAGE.PRO || user.storagePlan === STORAGE.PRO_PLUS)) {
-    return user.storagePlan;
-  }
-  return STORAGE.FREE;
-}
-
-// Каталог задачников: индекс хранится в KV, файлы — в Blob.
+// Каталог задачников: список лежит в KV, сами файлы в Blob.
 export function catalogPrefix(subject, classNumber) {
   return `pvz/catalog/${subject}/${classNumber}/`;
 }

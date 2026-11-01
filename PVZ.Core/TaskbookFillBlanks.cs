@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -17,8 +19,8 @@ public static partial class FillBlankRules
         string.IsNullOrEmpty(text) ? 0 : BlankPattern.Matches(text).Count;
 
     /// <summary>
-    /// Делит текст с пропусками на части: segments[i] — текст перед пропуском i,
-    /// segments[^1] — текст после последнего пропуска. Всегда blanks + 1 элементов.
+    /// Делит текст с пропусками на части: segments[i] стоит перед пропуском i,
+    /// segments[^1] идёт после последнего пропуска. Всегда blanks + 1 элементов.
     /// </summary>
     public static string[] SplitSegments(string? text) =>
         BlankPattern.Split(text ?? "");
@@ -60,7 +62,7 @@ public static partial class FillBlankRules
     }
 
     /// <summary>
-    /// Проверяет ответ ученика: пустой ответ не принимается, сравнение — по
+    /// Проверяет ответ ученика: пустой ответ не принимается, сравнение идёт по
     /// нормализованным вариантам (Answer + AcceptedAnswers).
     /// </summary>
     public static bool Matches(FillBlankDto blank, string? entered)

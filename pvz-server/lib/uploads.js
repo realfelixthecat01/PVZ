@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 import {
   MAX_PACKAGE_BYTES,
   MAX_EXCHANGE_FILE_BYTES,
@@ -5,9 +7,8 @@ import {
 } from "./config.js";
 import { blob } from "./storage.js";
 import { getJson, setJson, deleteJson } from "./storage.js";
-import { RETENTION, RETENTION_NAMES, PLAN, planToRetention } from "./limits.js";
-import { ensureCanStore } from "./accounts.js";
-import { getOwnerUsage, addSessionFile, addStudentFile, uploadPackageBuffer, listSessionFiles } from "./store.js";
+import { RETENTION, RETENTION_NAMES } from "./limits.js";
+import { addSessionFile, addStudentFile, uploadPackageBuffer, listSessionFiles, assertGuestSessionLimit } from "./store.js";
 import {
   HttpError,
   InvalidDataError,
@@ -16,16 +17,12 @@ import {
   iso,
   parseDate,
   isSessionId,
+  isTokenShaped,
 } from "./util.js";
 
-/*
- * Единый протокол загрузки:
- *   POST /api/upload/begin    -> { uploadId, uploadUrl, headers }
- *   PUT  uploadUrl            -> сырые байты (на Vercel — напрямую в Blob)
- *   POST /api/upload/complete -> результат (задачник или файл)
- * Тело запроса к функции Vercel ограничено 4,5 МБ, поэтому крупные файлы
- * идут в Blob напрямую по краткосрочному client token.
- */
+// Протокол загрузки: begin выдаёт ссылку, PUT уходит в хранилище, complete оформляет файл.
+// Тело запроса к функции Vercel ограничено 4,5 МБ, поэтому крупные файлы идут
+// напрямую в Blob по краткосрочной presigned-ссылке.
 
 const UPLOADS_INDEX = "pvz:uploads";
 const uploadKey = (id) => `pvz:upload:${id}`;
@@ -36,15 +33,7 @@ function parseRetentionName(raw) {
   const name = String(raw ?? "").trim();
   const entry = Object.entries(RETENTION_NAMES).find(([, value]) => value.toLowerCase() === name.toLowerCase());
   if (!entry) return null;
-  const retention = Number(entry[0]);
-  if (retention === RETENTION.TWO_WEEKS) return null;
-  return retention;
-}
-
-function parsePlan(raw) {
-  return String(raw ?? "").toLowerCase() === "paid-month" || String(raw ?? "").toLowerCase() === "paidonemonth"
-    ? PLAN.PAID_ONE_MONTH
-    : PLAN.FREE_TWO_WEEKS;
+  return Number(entry[0]);
 }
 
 function requireSize(size, maximum) {
@@ -65,57 +54,61 @@ async function removePending(uploadId) {
   if (ids.includes(uploadId)) await setJson(UPLOADS_INDEX, ids.filter((id) => id !== uploadId));
 }
 
+// Запись живёт UPLOAD_TTL_MS: за это время файл должен успеть лечь в хранилище,
+// иначе complete его не найдёт и cron подчистит ссылку.
+async function issuePending(signed, record) {
+  await addPending({
+    uploadId: signed.uploadId,
+    ...record,
+    expiresAt: iso(new Date(Date.now() + UPLOAD_TTL_MS)),
+  });
+  return { uploadId: signed.uploadId, uploadUrl: signed.uploadUrl, headers: signed.headers };
+}
+
 async function presign(pathname, maximum) {
   return blob().presign(pathname, { contentType: "application/octet-stream", maxBytes: maximum });
 }
 
 export async function beginUpload(principal, body) {
   const target = String(body?.target ?? "");
-  const uploadId = randomId();
 
   switch (target) {
     case "teacher-session": {
       if (!principal) throw new UnauthorizedError("Требуется вход учителя.");
       if (!requireSize(body.size, MAX_PACKAGE_BYTES)) throw new InvalidDataError("Размер .pvz должен быть от 1 байта до 16 МиБ.");
-      const plan = parsePlan(body.plan);
+      if (principal.isGuest) await assertGuestSessionLimit(principal.userId);
       const sessionId = randomId();
       const pathname = sessionPackagePath(sessionId);
       const signed = await presign(pathname, MAX_PACKAGE_BYTES);
-      await addPending({
-        uploadId: signed.uploadId,
+      return issuePending(signed, {
         target,
         size: body.size,
         sessionId,
-        plan,
-        retention: planToRetention(plan),
+        retention: principal.isGuest ? RETENTION.HOURS_48 : RETENTION.TWO_WEEKS,
         ownerUserId: principal.kind === "root" ? null : principal.userId,
         pathname,
-        expiresAt: iso(new Date(Date.now() + UPLOAD_TTL_MS)),
       });
-      return { uploadId: signed.uploadId, uploadUrl: signed.uploadUrl, headers: signed.headers };
     }
 
     case "account-file": {
       if (!principal) throw new UnauthorizedError("Требуется вход в личный кабинет.");
+      if (principal.isGuest) {
+        throw new HttpError(400, "В гостевом режиме личное хранилище недоступно. Создайте аккаунт учителя в приложении.");
+      }
       if (!requireSize(body.size, MAX_PACKAGE_BYTES)) throw new InvalidDataError("Прикрепите один файл .pvz размером до 16 МиБ.");
       const retention = parseRetentionName(body.retention);
       if (retention === null) throw new InvalidDataError("Выберите срок хранения задачника.");
-      const usage = await getOwnerUsage(principal.userId);
-      await ensureCanStore(principal, retention, usage);
       const sessionId = randomId();
       const pathname = sessionPackagePath(sessionId);
       const signed = await presign(pathname, MAX_PACKAGE_BYTES);
-      await addPending({
-        uploadId: signed.uploadId,
+      return issuePending(signed, {
         target,
         size: body.size,
         sessionId,
         retention,
         ownerUserId: principal.userId,
         pathname,
-        expiresAt: iso(new Date(Date.now() + UPLOAD_TTL_MS)),
       });
-      return { uploadId: signed.uploadId, uploadUrl: signed.uploadUrl, headers: signed.headers };
     }
 
     case "teacher-material": {
@@ -130,8 +123,7 @@ export async function beginUpload(principal, body) {
       const fileId = randomId();
       const pathname = exchangePath(sessionId, fileId);
       const signed = await presign(pathname, MAX_EXCHANGE_FILE_BYTES);
-      await addPending({
-        uploadId: signed.uploadId,
+      return issuePending(signed, {
         target,
         size: body.size,
         name: body.name ?? "",
@@ -139,9 +131,7 @@ export async function beginUpload(principal, body) {
         fileId,
         pathname,
         ownerUserId: principal.userId,
-        expiresAt: iso(new Date(Date.now() + UPLOAD_TTL_MS)),
       });
-      return { uploadId: signed.uploadId, uploadUrl: signed.uploadUrl, headers: signed.headers };
     }
 
     case "student-work": {
@@ -150,13 +140,12 @@ export async function beginUpload(principal, body) {
       }
       const studentSessionId = String(body.studentSessionId ?? "");
       if (studentSessionId.length === 0) throw new InvalidDataError("Не указана сессия ученика.");
-      const link = await getJson(`pvz:student:${studentSessionId}`);
+      const link = isTokenShaped(studentSessionId) ? await getJson(`pvz:student:${studentSessionId}`) : null;
       if (!link) throw new HttpError(404, "Сессия ученика не найдена.");
       const fileId = randomId();
       const pathname = exchangePath(link.sessionId, fileId);
       const signed = await presign(pathname, MAX_EXCHANGE_FILE_BYTES);
-      await addPending({
-        uploadId: signed.uploadId,
+      return issuePending(signed, {
         target,
         size: body.size,
         name: body.name ?? "",
@@ -164,9 +153,7 @@ export async function beginUpload(principal, body) {
         studentSessionId,
         fileId,
         pathname,
-        expiresAt: iso(new Date(Date.now() + UPLOAD_TTL_MS)),
       });
-      return { uploadId: signed.uploadId, uploadUrl: signed.uploadUrl, headers: signed.headers };
     }
 
     default:
@@ -180,7 +167,8 @@ async function readPending(uploadId, principal) {
   if (record.ownerUserId !== null && record.ownerUserId !== undefined) {
     if (!principal || principal.userId !== record.ownerUserId) throw new UnauthorizedError("Загрузка принадлежит другому аккаунту.");
   }
-  if (parseDate(record.expiresAt)?.getTime() <= Date.now()) {
+  const expiresAt = parseDate(record.expiresAt);
+  if (!expiresAt || expiresAt.getTime() <= Date.now()) {
     await removePending(uploadId);
     throw new HttpError(404, "Загрузка не найдена или истекла. Повторите попытку.");
   }
@@ -188,6 +176,8 @@ async function readPending(uploadId, principal) {
 }
 
 export async function putUpload(uploadId, buffer) {
+  // uploadId выдаёт сервер, локальный бэкенд по нему же пишет файл на диск.
+  if (!isSessionId(uploadId)) throw new HttpError(404, "Загрузка не найдена или истекла. Повторите попытку.");
   const record = await getJson(uploadKey(uploadId));
   if (!record) throw new HttpError(404, "Загрузка не найдена или истекла. Повторите попытку.");
   if (!buffer || buffer.length !== record.size) {
@@ -228,10 +218,7 @@ export async function completeUpload(principal, uploadId) {
       try {
         const receipt = await uploadPackageBuffer(packageBuffer, {
           retention: record.retention,
-          plan: record.plan ?? PLAN.FREE_TWO_WEEKS,
           ownerUserId: record.ownerUserId,
-          enforceQuota: record.target === "account-file",
-          principal: record.target === "account-file" ? principal : null,
           sessionId: record.sessionId,
           packageAlreadyStored: true,
         });

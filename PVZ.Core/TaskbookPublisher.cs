@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 namespace PVZ.Core;
 
 public sealed class TaskbookPublishResult
@@ -55,10 +57,11 @@ public static class TaskbookPublisher
     public static TaskbookPublishResult PublishExe(
         string outputExePath,
         TaskbookDocument document,
-        IProgress<string>? progress = null)
+        IProgress<string>? progress = null,
+        string? templatePath = null)
     {
-        var templatePath = FindPlayerTemplate();
-        if (templatePath == null)
+        templatePath ??= FindPlayerTemplate();
+        if (templatePath == null || !File.Exists(templatePath))
         {
             return new TaskbookPublishResult
             {
@@ -122,14 +125,13 @@ public static class TaskbookPublisher
         TaskbookDocument document,
         string serverUrl,
         string accessToken,
-        StoragePlan plan = StoragePlan.FreeTwoWeeks,
         CancellationToken cancellationToken = default)
     {
         var packagePath = Path.Combine(Path.GetTempPath(), $"pvz-upload-{Guid.NewGuid():N}.pvz");
         try
         {
             TaskbookPackageIO.Save(packagePath, document);
-            var receipt = await TaskbookOnlineClient.UploadAsync(packagePath, serverUrl, accessToken, plan, cancellationToken);
+            var receipt = await TaskbookOnlineClient.UploadAsync(packagePath, serverUrl, accessToken, cancellationToken);
             return new TaskbookPublishResult
             {
                 Success = true,

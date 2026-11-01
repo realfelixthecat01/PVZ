@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 import crypto from "node:crypto";
 import zlib from "node:zlib";
 import { MAX_PACKAGE_BYTES } from "./config.js";
@@ -24,7 +26,9 @@ export function loadPackage(buffer) {
   const compressed = buffer.subarray(HEADER_LENGTH);
   let jsonBytes;
   try {
-    jsonBytes = zlib.brotliDecompressSync(compressed, { maxOutputLength: MAX_DOCUMENT_BYTES });
+    // Как в C# Load: распаковку останавливаем на заявленной длине, чтобы файл-бомба
+    // не развернул в память все 64 МиБ раньше времени.
+    jsonBytes = zlib.brotliDecompressSync(compressed, { maxOutputLength: documentLength });
   } catch {
     throw new InvalidPackageError("Файл задачника повреждён или содержит неверные сжатые данные.");
   }
@@ -51,17 +55,38 @@ export function loadPackage(buffer) {
 
 export class InvalidPackageError extends Error {}
 
-// TaskbookScoring.GetTaskMaxScore: kind 0 — тесты, kind 1 — пропуски.
+// Зеркало TaskbookScoring.GetTaskMaxScore: kind 0 тесты, 1 пропуски, 2 выбор ответа,
+// 3 соответствие, 4 короткий ответ.
 export function getTaskMaxScore(task) {
   const bonus = typeof task.bonusPointsForAllTests === "number" ? task.bonusPointsForAllTests : 10;
-  if (task.kind === 1) {
-    const blanks = Array.isArray(task.blanks) ? task.blanks : [];
-    if (blanks.length === 0) return 0;
-    return blanks.reduce((sum, blank) => sum + (blank.points ?? 25), 0) + bonus;
+  const sumPoints = (items) =>
+    (Array.isArray(items) ? items : []).reduce((sum, item) => sum + (item.points ?? 25), 0);
+  switch (task.kind) {
+    case 2: {
+      // В максимум входят только верные варианты: отмеченный зря отнимает баллы.
+      const options = Array.isArray(task.options) ? task.options : [];
+      if (options.length === 0) return 0;
+      return options
+        .filter((option) => option.correct)
+        .reduce((sum, option) => sum + (option.points ?? 25), 0) + bonus;
+    }
+    case 3: {
+      const pairs = Array.isArray(task.pairs) ? task.pairs : [];
+      if (pairs.length === 0) return 0;
+      return sumPoints(pairs) + bonus;
+    }
+    case 1:
+    case 4: {
+      const blanks = Array.isArray(task.blanks) ? task.blanks : [];
+      if (blanks.length === 0) return 0;
+      return sumPoints(blanks) + bonus;
+    }
+    default: {
+      const tests = Array.isArray(task.tests) ? task.tests : [];
+      if (tests.length === 0) return 0;
+      return sumPoints(tests) + bonus;
+    }
   }
-  const tests = Array.isArray(task.tests) ? task.tests : [];
-  if (tests.length === 0) return 0;
-  return tests.reduce((sum, test) => sum + (test.points ?? 25), 0) + bonus;
 }
 
 export function getDocumentMaxScore(document) {

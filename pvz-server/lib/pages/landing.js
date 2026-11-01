@@ -1,6 +1,7 @@
-// Порт PVZS/LandingPage.cs: сборка главной страницы с карточками сборок.
-// index-shell.html — статичная HTML-копия Render() из C#, где {{RenderDownloads(downloads)}}
-// заменён на плейсхолдер <!--DOWNLOADS--> (он же и есть convention для инъекции).
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
+// Порт PVZS/LandingPage.cs: главная страница собирается из index-shell.html,
+// а вместо {{RenderDownloads(downloads)}} в ней стоит метка <!--DOWNLOADS-->.
 
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';

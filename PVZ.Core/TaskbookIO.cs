@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using System.Text.Json;
 
 namespace PVZ.Core;
@@ -23,6 +25,8 @@ public static class TaskbookIO
         {
             task.Tests ??= new();
             task.Blanks ??= new();
+            task.Options ??= new();
+            task.Pairs ??= new();
         }
 
         return document;

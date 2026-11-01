@@ -1,3 +1,5 @@
+// Copyright © 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены, подробности в LICENSE.
+
 using PVZ.Core;
 
 namespace PVZ.Player;
@@ -9,12 +11,13 @@ public sealed class StudentStartForm : Form
 
     private readonly List<(Control Control, int Top)> _layoutItems = new();
     private readonly float _scale;
+    private LocalIdentity? _identity;
 
     public StudentStartForm()
     {
         PvzFormIcon.TryApply(this);
         _scale = PvzTheme.ScreenScale(this);
-        Text = "Пункт Выдачи Задачек — ученик";
+        Text = "Пункт Выдачи Задачек: ученик";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = ScaleSize(new Size(720, 500));
         ClientSize = ScaleSize(new Size(860, 600));
@@ -22,6 +25,7 @@ public sealed class StudentStartForm : Form
         Resize += (_, _) => RelayoutCentered();
         PvzTheme.FitToScreen(this);
         AutoScroll = true;
+        _identity = LocalIdentityStore.Load("student.json");
         ShowWelcome();
     }
 
@@ -52,11 +56,59 @@ public sealed class StudentStartForm : Form
         offline.Click += (_, _) => OpenOfflineTaskbook();
         online.Click += (_, _) => ShowOnlineTokenEntry();
         back.Click += (_, _) => ShowWelcome();
-        AddCentered(title, 95);
-        AddCentered(subtitle, 154);
-        AddCentered(offline, 222);
-        AddCentered(online, 294);
-        AddCentered(back, 380);
+        AddCentered(title, 70);
+        AddCentered(subtitle, 128);
+        AddCentered(offline, 196);
+        AddCentered(online, 262);
+
+        if (_identity is null)
+        {
+            var account = CreateButton("Войти или создать аккаунт", primary: false, PvzFormButtonIcons.Glyphs.Teacher);
+            account.Click += async (_, _) => await ShowAccountDialogAsync();
+            AddCentered(account, 328);
+        }
+        else
+        {
+            var greeting = CreateCenteredLabel(
+                $"Вы вошли как: {_identity.FullName}{(_identity.ClassName.Length > 0 ? $", {_identity.ClassName}" : "")}",
+                10.5F,
+                FontStyle.Regular,
+                PvzTheme.Muted);
+            var results = CreateButton("Мои результаты", primary: false, PvzFormButtonIcons.Glyphs.OpenFile);
+            results.Click += (_, _) => ShowResults();
+            var logout = CreateButton("Выйти из аккаунта", primary: false, PvzFormButtonIcons.Glyphs.Back);
+            logout.Click += (_, _) => SignOut();
+            AddCentered(greeting, 330);
+            AddCentered(results, 366);
+            AddCentered(logout, 430);
+        }
+
+        AddCentered(back, _identity is null ? 414 : 494);
+    }
+
+    private async Task ShowAccountDialogAsync()
+    {
+        using var dialog = new StudentAccountForm();
+        if (dialog.ShowDialog(this) == DialogResult.OK && dialog.Identity is not null)
+        {
+            _identity = dialog.Identity;
+            ShowSourceChoices();
+        }
+    }
+
+    private void SignOut()
+    {
+        LocalIdentityStore.Delete("student.json");
+        _identity = null;
+        ShowSourceChoices();
+    }
+
+    private void ShowResults()
+    {
+        if (_identity is null)
+            return;
+        using var results = new StudentResultsForm(_identity);
+        results.ShowDialog(this);
     }
 
     private void ShowOnlineTokenEntry()
@@ -72,6 +124,14 @@ public sealed class StudentStartForm : Form
         var firstName = CreateStudentField("Имя");
         var lastName = CreateStudentField("Фамилия");
         var className = CreateStudentField("Класс");
+        if (_identity is not null)
+        {
+            // Аккаунт ученика подставляет имя и класс: писать их вручную больше не нужно.
+            var parts = _identity.FullName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length > 0) firstName.Text = parts[0];
+            if (parts.Length > 1) lastName.Text = parts[1];
+            if (_identity.ClassName.Length > 0) className.Text = _identity.ClassName;
+        }
         var open = CreateButton("Подключиться", primary: true, PvzFormButtonIcons.Glyphs.Connect);
         open.Click += async (_, _) =>
         {
@@ -120,7 +180,8 @@ public sealed class StudentStartForm : Form
         {
             var serverUrl = await TaskbookOnlineClient.ResolveServerUrlAsync();
             var document = await TaskbookOnlineClient.DownloadAsync(token, serverUrl);
-            var session = await TaskbookOnlineClient.StartStudentSessionAsync(token, student, serverUrl);
+            var session = await TaskbookOnlineClient.StartStudentSessionAsync(
+                token, student, serverUrl, _identity?.AccessToken);
             Hide();
             using (var taskbook = new MainForm(document, session, serverUrl))
                 taskbook.ShowDialog(this);

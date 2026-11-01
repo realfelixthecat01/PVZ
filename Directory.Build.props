@@ -3,4 +3,8 @@
   <PropertyGroup>
     <CetCompat>false</CetCompat>
   </PropertyGroup>
+  <PropertyGroup>
+    <Copyright>© 2026 Козыро Ярослав Дмитриевич, Захарик Тимур Александрович. Все права защищены.</Copyright>
+    <Authors>Козыро Ярослав Дмитриевич; Захарик Тимур Александрович</Authors>
+  </PropertyGroup>
 </Project>
